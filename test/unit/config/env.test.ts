@@ -17,6 +17,12 @@ describe('loadConfig', () => {
       port: 4100,
       logLevel: 'warn',
       databaseUrl: 'mysql://app:secret@localhost:3306/weather',
+      openMeteo: {
+        geocodingUrl: 'https://geocoding-api.open-meteo.com/v1/search',
+        forecastUrl: 'https://api.open-meteo.com/v1/forecast',
+        marineUrl: 'https://marine-api.open-meteo.com/v1/marine',
+      },
+      upstream: { timeoutMs: 3000, maxRetries: 2 },
     });
     expect(Object.isFrozen(config)).toBe(true);
   });
@@ -36,6 +42,13 @@ describe('loadConfig', () => {
     ['out of range PORT', { ...validEnv, PORT: '70000' }, 'PORT'],
     ['unknown NODE_ENV', { ...validEnv, NODE_ENV: 'staging' }, 'NODE_ENV'],
     ['unknown LOG_LEVEL', { ...validEnv, LOG_LEVEL: 'verbose' }, 'LOG_LEVEL'],
+    [
+      'non-URL upstream',
+      { ...validEnv, OPEN_METEO_FORECAST_URL: 'not a url' },
+      'OPEN_METEO_FORECAST_URL',
+    ],
+    ['timeout too small', { ...validEnv, UPSTREAM_TIMEOUT_MS: '5' }, 'UPSTREAM_TIMEOUT_MS'],
+    ['too many retries', { ...validEnv, UPSTREAM_MAX_RETRIES: '50' }, 'UPSTREAM_MAX_RETRIES'],
   ])('rejects %s and names the variable', (_case, env, variable) => {
     expect(() => loadConfig(env)).toThrow(ConfigError);
     expect(() => loadConfig(env)).toThrow(variable);
