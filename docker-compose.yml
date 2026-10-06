@@ -8,7 +8,8 @@ services:
       APP_DB_PASSWORD: ${APP_DB_PASSWORD:-app_dev_password}
       MIGRATOR_DB_PASSWORD: ${MIGRATOR_DB_PASSWORD:-migrator_dev_password}
     ports:
-      - '3306:3306'
+      # Host port defaults to 3307 so it doesn't clash with a locally installed MySQL on 3306.
+      - '${MYSQL_HOST_PORT:-3307}:3306'
     volumes:
       - mysql-data:/var/lib/mysql
       - ./docker/mysql/init:/docker-entrypoint-initdb.d:ro

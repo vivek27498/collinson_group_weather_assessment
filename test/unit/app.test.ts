@@ -12,6 +12,23 @@ describe('createApp', () => {
     expect(res.body).toMatchObject({ success: true, data: { status: 'ok' } });
   });
 
+  it('GET /readyz is ready normally and 503 while shutting down', async () => {
+    let shuttingDown = false;
+    const drainingApp = createApp({
+      logger: createLogger({ level: 'silent' }),
+      isShuttingDown: () => shuttingDown,
+    });
+
+    const ready = await request(drainingApp).get('/readyz');
+    expect(ready.status).toBe(200);
+    expect(ready.body).toMatchObject({ success: true, data: { status: 'ready' } });
+
+    shuttingDown = true;
+    const draining = await request(drainingApp).get('/readyz');
+    expect(draining.status).toBe(503);
+    expect(draining.body).toMatchObject({ success: false, error: { code: 'SHUTTING_DOWN' } });
+  });
+
   it('sets security headers and hides the framework', async () => {
     const res = await request(app).get('/healthz');
 

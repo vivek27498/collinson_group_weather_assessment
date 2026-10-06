@@ -31,3 +31,12 @@ and code, and I made the calls. This log records where I steered it, and what I 
   - Apollo requires graphql v16.
 - **Caught while testing the build:** expected 404s were logged with full stack traces. Now only unexpected
   errors log a stack trace.
+
+## Session 2b: M1 review (2026-10-06)
+
+- **I pushed back:** unhandled rejections and signal-based shutdown seemed to be missing. The AI showed they
+  were in `index.ts`, but agreed with the underlying concern: they were untested, an instant exit dropped
+  in-flight requests, and there was no readiness flag or resource cleanup. They were rewritten as a
+  tested module.
+- **I asked** what CI means here. It's the GitHub Actions workflow in `.github/workflows/ci.yml`, which runs
+  the same checks on every push.
