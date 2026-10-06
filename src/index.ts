@@ -1,6 +1,10 @@
 import { createApp } from './app';
 import { loadConfig } from './config/env';
 import { createLogger } from './observability/logger';
+import {
+  createShutdownController,
+  registerProcessHandlers,
+} from './shared/process/graceful-shutdown';
 
 /**
  * Composition root: the only place that reads the environment, creates long-lived
@@ -10,45 +14,21 @@ function main(): void {
   const config = loadConfig();
   const logger = createLogger({ level: config.logLevel, pretty: config.env === 'development' });
 
-  const app = createApp({ logger });
+  // /readyz needs the controller, and the controller needs the server the app creates.
+  // The closure only runs per request, long after `controller` is initialised below.
+  const app = createApp({ logger, isShuttingDown: () => controller.isShuttingDown() });
+
   const server = app.listen(config.port, () => {
     logger.info({ port: config.port, env: config.env }, 'Server listening');
   });
 
-  // Graceful shutdown: stop accepting new connections and let in-flight requests finish.
-  // Hard-exit after a deadline so a stuck connection can't block a deploy forever.
-  const SHUTDOWN_TIMEOUT_MS = 10_000;
-  let shuttingDown = false;
-  const shutdown = (signal: NodeJS.Signals): void => {
-    if (shuttingDown) return;
-    shuttingDown = true;
-    logger.info({ signal }, 'Shutting down');
-    setTimeout(() => {
-      logger.error('Forced shutdown after timeout');
-      process.exit(1);
-    }, SHUTDOWN_TIMEOUT_MS).unref();
-    server.close((err) => {
-      if (err) {
-        logger.error({ err }, 'Error during shutdown');
-        process.exit(1);
-      }
-      logger.info('Shutdown complete');
-      process.exit(0);
-    });
-  };
-  process.on('SIGTERM', shutdown);
-  process.on('SIGINT', shutdown);
-
-  // A rejection or exception nobody handled means the process is in an unknown state:
-  // log it with full context, then exit and let the orchestrator restart us.
-  process.on('unhandledRejection', (reason) => {
-    logger.fatal({ err: reason }, 'Unhandled promise rejection');
-    process.exit(1);
+  const controller = createShutdownController({
+    server,
+    logger,
+    timeoutMs: 10_000,
+    resources: [], // DB pool is registered here once persistence lands (M4).
   });
-  process.on('uncaughtException', (err) => {
-    logger.fatal({ err }, 'Uncaught exception');
-    process.exit(1);
-  });
+  registerProcessHandlers(controller, logger);
 }
 
 try {

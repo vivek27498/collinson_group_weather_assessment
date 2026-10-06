@@ -34,6 +34,24 @@ Unpolished notes on how the work is going, newest last. Cuts and the reasons for
   /healthz and 404 envelopes are correct; bad config exits 1 without echoing secrets; lint rejects all
   three unsafe-SQL test calls.
 - Fixed after testing the build: expected 404s were logged with full stack traces.
-- **Not verified yet:** `docker compose up`, because Docker Desktop wasn't running on this machine.
-  To re-check: start Docker, run `docker compose up -d mysql`, and confirm the `app` user can't CREATE TABLE.
 - Next: M2 (domain + scoring, TDD).
+
+## 2026-10-06: M1 review fixes
+
+- **Least privilege verified against real MySQL.** `app` can INSERT/SELECT/UPDATE/DELETE, but
+  DROP/CREATE/ALTER and reading `mysql.user` fail with ERROR 1142. `migrator` can run DDL.
+- The host port for MySQL is now configurable (default 3307), because a natively installed MySQL
+  already listens on 3306 on this machine.
+- **Review feedback (mine): process-level error handling and shutdown were inline in index.ts and untested.**
+  Moved them to `src/shared/process/graceful-shutdown.ts`:
+  - Idempotent shutdown: flip readiness → stop accepting + close idle keep-alive sockets → drain in-flight
+    → close resources in reverse order → exit.
+  - Force exit after a timeout. A second Ctrl+C exits immediately.
+  - unhandledRejection / uncaughtException: log at fatal, then drain and exit 1 (previously an instant
+    exit that dropped in-flight requests).
+  - `/readyz` returns 503 `SHUTTING_DOWN` while draining, so a load balancer stops routing new requests.
+  - 15 new tests, including a real HTTP server: the in-flight request completes and new connections are refused.
+- Gotcha: on Windows, "localhost" is dual-stack, so a refused connection surfaced as an AggregateError with an
+  empty message. That failed an assertion and left a socket open, which hung Jest. Fixed by pinning
+  127.0.0.1, asserting on `code`, and cleaning up in `finally`.
+- **Verified for real:** `docker stop` (SIGTERM) on the built image logs a graceful sequence and exits 0.

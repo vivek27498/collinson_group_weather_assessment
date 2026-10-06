@@ -14,6 +14,7 @@ export const ErrorKind = {
   PayloadTooLarge: 'PAYLOAD_TOO_LARGE',
   RateLimited: 'RATE_LIMITED',
   UpstreamUnavailable: 'UPSTREAM_UNAVAILABLE',
+  ServiceUnavailable: 'SERVICE_UNAVAILABLE',
   Internal: 'INTERNAL',
 } as const;
 export type ErrorKind = (typeof ErrorKind)[keyof typeof ErrorKind];
@@ -68,5 +69,13 @@ export class UpstreamUnavailableError extends AppError {
   readonly kind = ErrorKind.UpstreamUnavailable;
   constructor(message = 'A dependency is temporarily unavailable', options?: AppErrorOptions) {
     super(message, 'UPSTREAM_UNAVAILABLE', options);
+  }
+}
+
+/** This instance can't serve right now (e.g. draining during shutdown). Expected, so logged at warn. */
+export class ServiceUnavailableError extends AppError {
+  readonly kind = ErrorKind.ServiceUnavailable;
+  constructor(message = 'Service temporarily unavailable', options?: AppErrorOptions) {
+    super(message, 'SERVICE_UNAVAILABLE', options);
   }
 }
