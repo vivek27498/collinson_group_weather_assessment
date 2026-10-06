@@ -168,3 +168,16 @@ docs/ decisions/ADR-00x-*.md, questions-and-assumptions.md, ai-log.md, worklog.m
 - Querying the same city twice: the second call is a cache hit (visible in logs and `/metrics`).
 - Stop the mock upstream → the stale response comes back with `isStale: true`.
 - `k6 run load/scenarios.js` against the mock upstream: a p95 target (e.g. <150ms warm), and the cold stampede produces 1 upstream call per city.
+
+## Re-plan (2026-10-07): vertical slices instead of layers
+
+After M2, the remaining milestones (M3 adapters, M4 persistence, M5 caching, M6 API) were layer by layer,
+which meant nothing could be tried end to end until M6. With no UI, being able to exercise each business use
+case in Postman as it lands matters more, so the rest is re-cut into vertical slices:
+
+| Slice | Use cases         | Contents                                                                                  |
+| ----- | ----------------- | ----------------------------------------------------------------------------------------- |
+| 1     | UC1–5, UC7        | Open-Meteo adapters (+ resilient HTTP), RankingService, GraphQL API, Postman collection   |
+| 2     | UC6 + hardening   | Disambiguation, Zod input allow-list, injection payload tests, depth limit, rate limiting |
+| 3     | UC8 + persistence | Prisma/MySQL, grid-cell cache, stale-while-revalidate, single-flight, /readyz DB ping     |
+| 4     | Ops               | Metrics, request-context logging, k6 load tests against a mock upstream, README           |
