@@ -55,3 +55,19 @@ Unpolished notes on how the work is going, newest last. Cuts and the reasons for
   empty message. That failed an assertion and left a socket open, which hung Jest. Fixed by pinning
   127.0.0.1, asserting on `code`, and cleaning up in `finally`.
 - **Verified for real:** `docker stop` (SIGTERM) on the built image logs a graceful sequence and exits 0.
+
+## 2026-10-07: M2, domain + scoring
+
+- Pure domain: `src/domain/types.ts`, the WMO weather-code categories, scoring primitives (ramp / fixed
+  adjustments + reasons), 4 Strategy scorers, a registry, and weekly ranking. No I/O anywhere in the domain.
+- Layering fix while building: the `ScoringConfig` _type_ moved into the domain, and `src/config/scoring.ts`
+  holds only the values, so the domain never imports from the config layer.
+- Indoor reuses the outdoor scorer (composition), so the two can't disagree about the weather.
+- Tests: a test-data builder (`test/support/builders.ts`) so each case only states what's different;
+  table-driven boundary cases with hand-computed expected scores; stub scorers to test ranking in
+  isolation; 3 scenario tests (alpine winter, surf town summer, rainy city) through the real registry.
+- 186 unit tests pass; the domain has 100% line coverage.
+- Small catch: the tests called concrete scorer classes with a location argument they don't declare.
+  Production always uses the `ActivityScorer` interface, so the tests now do too.
+- Decisions: ADR-006 (scoring model, alternatives, known simplifications).
+- Next: M3, the Open-Meteo adapters (geocoding, forecast, marine) with timeout and retry.

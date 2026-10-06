@@ -40,3 +40,11 @@ and code, and I made the calls. This log records where I steered it, and what I 
   tested module.
 - **I asked** what CI means here. It's the GitHub Actions workflow in `.github/workflows/ci.yml`, which runs
   the same checks on every push.
+
+## Session 3: M2 scoring (2026-10-07)
+
+- The AI proposed the "start at 100, named adjustments" model. I kept it over a weighted-sum model
+  because every score can be explained to a user (and to the interview panel).
+- Thresholds (snow depth, wave sweet spot 1–2.5 m, comfort band 15–25°C) are judgement calls, kept
+  in config, with the reasoning in ADR-006 and the PM questions doc.
+- While building, the AI moved the config type into the domain to keep dependencies pointing inwards.
