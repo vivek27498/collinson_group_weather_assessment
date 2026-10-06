@@ -1,4 +1,4 @@
-import express, { type Express } from 'express';
+import express, { type Express, type RequestHandler } from 'express';
 import helmet from 'helmet';
 import { pinoHttp } from 'pino-http';
 import type { Logger } from './observability/logger';
@@ -11,6 +11,8 @@ export interface AppDependencies {
   readonly logger: Logger;
   /** Readiness turns 503 while draining so load balancers stop routing new traffic here. */
   readonly isShuttingDown?: () => boolean;
+  /** The GraphQL endpoint (Apollo). Optional so infrastructure tests can build the bare app. */
+  readonly graphqlHandler?: RequestHandler;
 }
 
 /**
@@ -21,7 +23,11 @@ export interface AppDependencies {
  *   request id + logging → security headers → body parsing (size-limited) → routes
  *   → 404 → error handler (always last).
  */
-export function createApp({ logger, isShuttingDown = () => false }: AppDependencies): Express {
+export function createApp({
+  logger,
+  isShuttingDown = () => false,
+  graphqlHandler,
+}: AppDependencies): Express {
   const app = express();
 
   app.disable('x-powered-by');
@@ -50,6 +56,10 @@ export function createApp({ logger, isShuttingDown = () => false }: AppDependenc
     }
     sendSuccess(req, res, { status: 'ready' });
   });
+
+  if (graphqlHandler) {
+    app.use('/graphql', graphqlHandler);
+  }
 
   app.use(notFoundHandler);
   app.use(errorHandler);

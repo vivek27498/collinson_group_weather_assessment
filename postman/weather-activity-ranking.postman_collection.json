@@ -1,0 +1,512 @@
+{
+  "info": {
+    "name": "Weather Activity Ranking",
+    "description": "Checks for each business use case. Start the server (npm run dev), then Run collection. See docs/manual-testing.md.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:4000"
+    }
+  ],
+  "item": [
+    {
+      "name": "0. Health",
+      "item": [
+        {
+          "name": "Liveness /healthz",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 ok envelope', () => { pm.response.to.have.status(200); const b = pm.response.json(); pm.expect(b.success).to.eql(true); pm.expect(b.data.status).to.eql('ok'); });",
+                  "pm.test('Has x-request-id header', () => pm.response.to.have.header('x-request-id'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "description": "Process is up. Standard REST envelope with requestId.",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/healthz",
+              "host": ["{{baseUrl}}"],
+              "path": ["healthz"]
+            }
+          }
+        },
+        {
+          "name": "Readiness /readyz",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 ready', () => pm.expect(pm.response.json().data.status).to.eql('ready'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "description": "Should this instance get traffic? Turns 503 SHUTTING_DOWN while draining.",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/readyz",
+              "host": ["{{baseUrl}}"],
+              "path": ["readyz"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "1. Plan the week (UC1-UC3)",
+      "item": [
+        {
+          "name": "Ski town - Chamonix",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "const r = body.data && body.data.activityRankings;",
+                  "pm.test('HTTP 200 and no GraphQL errors', () => { pm.response.to.have.status(200); pm.expect(body.errors).to.be.undefined; });",
+                  "pm.test('Result is ActivityRankings', () => pm.expect(r.__typename).to.eql('ActivityRankings'));",
+                  "pm.test('All 4 activities ranked 1..4', () => pm.expect(r.activities.map(a => a.rank)).to.eql([1, 2, 3, 4]));",
+                  "pm.test('Applicable activities have 7 days and a best day', () => r.activities.filter(a => a.applicable).forEach(a => { pm.expect(a.days.length).to.eql(7); pm.expect(a.bestDay).to.match(/^\\d{4}-\\d{2}-\\d{2}$/); }));",
+                  "pm.test('Every day explains itself (reasons array)', () => r.activities.forEach(a => a.days.forEach(d => pm.expect(d.reasons).to.be.an('array'))));",
+                  "console.log(r.activities.map(a => a.rank + '. ' + a.activity + ': ' + a.weeklyScore + ' (' + a.weeklyRating + ') best ' + a.bestDay).join('\\n'));",
+                  "pm.test('Surfing is NOT_APPLICABLE inland, ranked last', () => { const s = r.activities.find(a => a.activity === 'SURFING'); pm.expect(s.applicable).to.eql(false); pm.expect(s.weeklyRating).to.eql('NOT_APPLICABLE'); pm.expect(s.rank).to.eql(4); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "description": "UC1 rank activities, UC2 best day, UC3 reasons. Inland, so surfing should be NOT_APPLICABLE (UC4).",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "query Rank($input: RankingInput!) {\n  activityRankings(input: $input) {\n    __typename\n    ... on ActivityRankings {\n      location { name region country countryCode elevation timezone }\n      forecastFetchedAt\n      isStale\n      warnings\n      activities {\n        rank\n        activity\n        weeklyScore\n        weeklyRating\n        applicable\n        bestDay\n        days { date score rating reasons }\n      }\n    }\n    ... on LocationNotFound { message query }\n  }\n}",
+                "variables": "{\n  \"input\": {\n    \"city\": \"Chamonix\"\n  }\n}"
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/graphql",
+              "host": ["{{baseUrl}}"],
+              "path": ["graphql"]
+            }
+          }
+        },
+        {
+          "name": "Summary only - pick your fields",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const r = pm.response.json().data.activityRankings;",
+                  "pm.test('Only the requested fields come back', () => pm.expect(Object.keys(r.activities[0]).sort()).to.eql(['activity', 'bestDay', 'rank', 'weeklyRating']));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "description": "GraphQL lets the client ask for just what it needs: a compact summary.",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "query Summary($input: RankingInput!) {\n  activityRankings(input: $input) {\n    __typename\n    ... on ActivityRankings {\n      location { name country }\n      activities { rank activity weeklyRating bestDay }\n    }\n  }\n}",
+                "variables": "{\n  \"input\": {\n    \"city\": \"Chamonix\"\n  }\n}"
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/graphql",
+              "host": ["{{baseUrl}}"],
+              "path": ["graphql"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Not applicable vs scored (UC4)",
+      "item": [
+        {
+          "name": "Surf town - Biarritz",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "const r = body.data && body.data.activityRankings;",
+                  "pm.test('HTTP 200 and no GraphQL errors', () => { pm.response.to.have.status(200); pm.expect(body.errors).to.be.undefined; });",
+                  "pm.test('Result is ActivityRankings', () => pm.expect(r.__typename).to.eql('ActivityRankings'));",
+                  "pm.test('All 4 activities ranked 1..4', () => pm.expect(r.activities.map(a => a.rank)).to.eql([1, 2, 3, 4]));",
+                  "pm.test('Applicable activities have 7 days and a best day', () => r.activities.filter(a => a.applicable).forEach(a => { pm.expect(a.days.length).to.eql(7); pm.expect(a.bestDay).to.match(/^\\d{4}-\\d{2}-\\d{2}$/); }));",
+                  "pm.test('Every day explains itself (reasons array)', () => r.activities.forEach(a => a.days.forEach(d => pm.expect(d.reasons).to.be.an('array'))));",
+                  "console.log(r.activities.map(a => a.rank + '. ' + a.activity + ': ' + a.weeklyScore + ' (' + a.weeklyRating + ') best ' + a.bestDay).join('\\n'));",
+                  "pm.test('Surfing is applicable on the coast', () => pm.expect(r.activities.find(a => a.activity === 'SURFING').applicable).to.eql(true));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "description": "Coastal: surfing is scored from wave height/period and wind.",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "query Rank($input: RankingInput!) {\n  activityRankings(input: $input) {\n    __typename\n    ... on ActivityRankings {\n      location { name region country countryCode elevation timezone }\n      forecastFetchedAt\n      isStale\n      warnings\n      activities {\n        rank\n        activity\n        weeklyScore\n        weeklyRating\n        applicable\n        bestDay\n        days { date score rating reasons }\n      }\n    }\n    ... on LocationNotFound { message query }\n  }\n}",
+                "variables": "{\n  \"input\": {\n    \"city\": \"Biarritz\"\n  }\n}"
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/graphql",
+              "host": ["{{baseUrl}}"],
+              "path": ["graphql"]
+            }
+          }
+        },
+        {
+          "name": "Inland capital - Madrid",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "const r = body.data && body.data.activityRankings;",
+                  "pm.test('HTTP 200 and no GraphQL errors', () => { pm.response.to.have.status(200); pm.expect(body.errors).to.be.undefined; });",
+                  "pm.test('Result is ActivityRankings', () => pm.expect(r.__typename).to.eql('ActivityRankings'));",
+                  "pm.test('All 4 activities ranked 1..4', () => pm.expect(r.activities.map(a => a.rank)).to.eql([1, 2, 3, 4]));",
+                  "pm.test('Applicable activities have 7 days and a best day', () => r.activities.filter(a => a.applicable).forEach(a => { pm.expect(a.days.length).to.eql(7); pm.expect(a.bestDay).to.match(/^\\d{4}-\\d{2}-\\d{2}$/); }));",
+                  "pm.test('Every day explains itself (reasons array)', () => r.activities.forEach(a => a.days.forEach(d => pm.expect(d.reasons).to.be.an('array'))));",
+                  "console.log(r.activities.map(a => a.rank + '. ' + a.activity + ': ' + a.weeklyScore + ' (' + a.weeklyRating + ') best ' + a.bestDay).join('\\n'));",
+                  "pm.test('Surfing explains why it is not applicable', () => pm.expect(r.activities.find(a => a.activity === 'SURFING').days[0].reasons[0]).to.match(/inland/));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "description": "No sea: surfing NOT_APPLICABLE with the reason, not a score of 0.",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "query Rank($input: RankingInput!) {\n  activityRankings(input: $input) {\n    __typename\n    ... on ActivityRankings {\n      location { name region country countryCode elevation timezone }\n      forecastFetchedAt\n      isStale\n      warnings\n      activities {\n        rank\n        activity\n        weeklyScore\n        weeklyRating\n        applicable\n        bestDay\n        days { date score rating reasons }\n      }\n    }\n    ... on LocationNotFound { message query }\n  }\n}",
+                "variables": "{\n  \"input\": {\n    \"city\": \"Madrid\"\n  }\n}"
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/graphql",
+              "host": ["{{baseUrl}}"],
+              "path": ["graphql"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Bad-weather fallback (UC5)",
+      "item": [
+        {
+          "name": "Rainy city - Bergen",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "const r = body.data && body.data.activityRankings;",
+                  "pm.test('HTTP 200 and no GraphQL errors', () => { pm.response.to.have.status(200); pm.expect(body.errors).to.be.undefined; });",
+                  "pm.test('Result is ActivityRankings', () => pm.expect(r.__typename).to.eql('ActivityRankings'));",
+                  "pm.test('All 4 activities ranked 1..4', () => pm.expect(r.activities.map(a => a.rank)).to.eql([1, 2, 3, 4]));",
+                  "pm.test('Applicable activities have 7 days and a best day', () => r.activities.filter(a => a.applicable).forEach(a => { pm.expect(a.days.length).to.eql(7); pm.expect(a.bestDay).to.match(/^\\d{4}-\\d{2}-\\d{2}$/); }));",
+                  "pm.test('Every day explains itself (reasons array)', () => r.activities.forEach(a => a.days.forEach(d => pm.expect(d.reasons).to.be.an('array'))));",
+                  "console.log(r.activities.map(a => a.rank + '. ' + a.activity + ': ' + a.weeklyScore + ' (' + a.weeklyRating + ') best ' + a.bestDay).join('\\n'));",
+                  "pm.test('Indoor is always applicable and at least its baseline (70)', () => { const i = r.activities.find(a => a.activity === 'INDOOR_SIGHTSEEING'); pm.expect(i.applicable).to.eql(true); pm.expect(i.weeklyScore).to.be.at.least(70); });",
+                  "pm.test('On any day where outdoor scores below 70, indoor scores higher', () => { const o = r.activities.find(a => a.activity === 'OUTDOOR_SIGHTSEEING'); const i = r.activities.find(a => a.activity === 'INDOOR_SIGHTSEEING'); o.days.forEach((d, n) => { if (d.score < 70) pm.expect(i.days[n].score).to.be.above(d.score); }); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "description": "One of Europe's rainiest cities. On wet days indoor sightseeing should outscore outdoor. Live data: exact results vary with the real forecast.",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "query Rank($input: RankingInput!) {\n  activityRankings(input: $input) {\n    __typename\n    ... on ActivityRankings {\n      location { name region country countryCode elevation timezone }\n      forecastFetchedAt\n      isStale\n      warnings\n      activities {\n        rank\n        activity\n        weeklyScore\n        weeklyRating\n        applicable\n        bestDay\n        days { date score rating reasons }\n      }\n    }\n    ... on LocationNotFound { message query }\n  }\n}",
+                "variables": "{\n  \"input\": {\n    \"city\": \"Bergen\",\n    \"countryCode\": \"NO\"\n  }\n}"
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/graphql",
+              "host": ["{{baseUrl}}"],
+              "path": ["graphql"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. Unknown place (UC7)",
+      "item": [
+        {
+          "name": "Unknown city",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('HTTP 200, no errors array', () => { pm.response.to.have.status(200); pm.expect(body.errors).to.be.undefined; });",
+                  "pm.test('LocationNotFound with a helpful message', () => { const r = body.data.activityRankings; pm.expect(r.__typename).to.eql('LocationNotFound'); pm.expect(r.message).to.include('Xyzzyqwv'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "description": "Expected outcome modelled as data (a union member), not as an error.",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "query Rank($input: RankingInput!) {\n  activityRankings(input: $input) {\n    __typename\n    ... on ActivityRankings {\n      location { name region country countryCode elevation timezone }\n      forecastFetchedAt\n      isStale\n      warnings\n      activities {\n        rank\n        activity\n        weeklyScore\n        weeklyRating\n        applicable\n        bestDay\n        days { date score rating reasons }\n      }\n    }\n    ... on LocationNotFound { message query }\n  }\n}",
+                "variables": "{\n  \"input\": {\n    \"city\": \"Xyzzyqwv\"\n  }\n}"
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/graphql",
+              "host": ["{{baseUrl}}"],
+              "path": ["graphql"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. Errors and protocol",
+      "item": [
+        {
+          "name": "Invalid query (unknown field)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400 validation error', () => { pm.response.to.have.status(400); pm.expect(pm.response.json().errors[0].extensions.code).to.eql('GRAPHQL_VALIDATION_FAILED'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "description": "GraphQL validation catches it before any of our code runs: 400 GRAPHQL_VALIDATION_FAILED.",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "{ activityRankings(input: { city: \"Paris\" }) { nope } }",
+                "variables": "{}"
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/graphql",
+              "host": ["{{baseUrl}}"],
+              "path": ["graphql"]
+            }
+          }
+        },
+        {
+          "name": "Missing required argument",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400 with a message naming the field', () => { pm.response.to.have.status(400); pm.expect(pm.response.json().errors[0].message).to.match(/city/); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "description": "city is required (String!).",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "{ activityRankings(input: { countryCode: \"FR\" }) { __typename } }",
+                "variables": "{}"
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/graphql",
+              "host": ["{{baseUrl}}"],
+              "path": ["graphql"]
+            }
+          }
+        },
+        {
+          "name": "Your own request id is echoed",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('x-request-id echoed', () => pm.expect(pm.response.headers.get('x-request-id')).to.eql('postman-trace-123'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "description": "Send x-request-id and find the same id in the response header and in the server logs.",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-request-id",
+                "value": "postman-trace-123"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "query Summary($input: RankingInput!) {\n  activityRankings(input: $input) {\n    __typename\n    ... on ActivityRankings {\n      location { name country }\n      activities { rank activity weeklyRating bestDay }\n    }\n  }\n}",
+                "variables": "{\n  \"input\": {\n    \"city\": \"London\"\n  }\n}"
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/graphql",
+              "host": ["{{baseUrl}}"],
+              "path": ["graphql"]
+            }
+          }
+        },
+        {
+          "name": "Unknown route",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('404 ROUTE_NOT_FOUND envelope', () => { pm.response.to.have.status(404); const b = pm.response.json(); pm.expect(b.success).to.eql(false); pm.expect(b.error.code).to.eql('ROUTE_NOT_FOUND'); pm.expect(b.meta.requestId).to.be.a('string'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "description": "Same JSON error envelope as every other error, never an HTML page.",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/does-not-exist",
+              "host": ["{{baseUrl}}"],
+              "path": ["does-not-exist"]
+            }
+          }
+        },
+        {
+          "name": "GET /graphql without preflight (CSRF protection)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400 CSRF block', () => { pm.response.to.have.status(400); pm.expect(pm.response.text()).to.match(/CSRF/i); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "description": "Apollo blocks simple GET requests that a malicious page could trigger cross-site.",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/graphql?query=%7B__typename%7D",
+              "host": ["{{baseUrl}}"],
+              "path": ["graphql"],
+              "query": [
+                {
+                  "key": "query",
+                  "value": "%7B__typename%7D"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -48,3 +48,12 @@ and code, and I made the calls. This log records where I steered it, and what I 
 - Thresholds (snow depth, wave sweet spot 1–2.5 m, comfort band 15–25°C) are judgement calls, kept
   in config, with the reasoning in ADR-006 and the PM questions doc.
 - While building, the AI moved the config type into the domain to keep dependencies pointing inwards.
+
+## Session 4: Slice 1 (2026-10-07)
+
+- **I asked** to implement the use cases one at a time and test them in Postman, since there's no UI.
+  The AI proposed re-cutting the remaining layer milestones into vertical slices. I agreed.
+- The AI inspected the live API first. That's how we learned that inland marine returns 200 + nulls, which shaped the design.
+- The AI wrote the Postman collection as a generator script (reviewable diffs) and ran it with newman before
+  handing it over.
+- **AI-caught issue:** the indoor rating looks too generous in sunny weeks. I left it as a PM question rather than retune silently.

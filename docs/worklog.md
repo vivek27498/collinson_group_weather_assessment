@@ -71,3 +71,33 @@ Unpolished notes on how the work is going, newest last. Cuts and the reasons for
   Production always uses the `ActivityScorer` interface, so the tests now do too.
 - Decisions: ADR-006 (scoring model, alternatives, known simplifications).
 - Next: M3, the Open-Meteo adapters (geocoding, forecast, marine) with timeout and retry.
+
+## 2026-10-07: Slice 1, rank a city end to end (UC1–5, UC7)
+
+- **Re-planned into vertical slices** (see plan.md): with no UI, every use case should be testable in Postman as soon as it lands.
+- Checked the real API before writing adapters, and recorded fixtures:
+  - The Marine API returns **HTTP 200 with all-null waves inland**, not an error. "Not applicable" is detected from the data.
+  - Geocoding **omits `results`** when nothing matches.
+  - Snow depth is hourly only, so we take each day's max.
+- HTTP: `FetchJsonClient` (timeout + failure classification) wrapped by `RetryingJsonClient` (Decorator:
+  exponential backoff with full jitter; retries only 5xx/429/network/timeout).
+- Adapters validate every payload with Zod (anti-corruption layer); a contract break is a non-retryable error.
+- `RankingService`: "location not found" is a **value** (a GraphQL union member), not an exception. Marine
+  failure degrades gracefully (rank the rest + a `warnings` entry); a forecast failure fails the request.
+- GraphQL: Apollo 5, formatError reuses the shared error mapper, no stack traces in any environment,
+  introspection off in production, landing page off (Postman is the client), CSRF prevention on.
+- **Bugs caught by tests:**
+  - Timeout detection used `instanceof Error`, but the abort reason is a DOMException that can come from
+    another realm (Jest's sandbox), so timeouts were reported as network errors. Now it checks `name`.
+  - Live run: the old M1 Docker container was still bound to :4000 and answered with 404s.
+  - A partially deleted `node_modules` (tslib missing; a native file locked by a VS Code process) was fixed
+    with a clean reinstall.
+- Verified live: Chamonix/Biarritz/London/Madrid/Bergen. Bergen ranked indoor first because of rain (UC5).
+- Postman collection (13 requests, 36 assertions) generated from `postman/build-collection.py`, all passing
+  via newman. Manual guide in docs/manual-testing.md, including how to simulate outages.
+- npm audit: 0 vulnerabilities in production deps. 20 moderate in dev-only tooling (sprintf-js via Jest's
+  coverage chain); not shipped, left for Dependabot.
+- **Follow-ups:**
+  - Retry warnings use the app logger, so they lack the request id. Fix in slice 4 with AsyncLocalStorage.
+  - Indoor often rates EXCELLENT in sunny weeks (see PM question #13).
+- Tests: 235 passing (unit + integration with nock), with no live network access in tests.
