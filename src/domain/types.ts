@@ -82,3 +82,19 @@ export interface ActivityRanking {
   readonly bestDay: IsoDate | null;
   readonly days: readonly DayScore[];
 }
+
+/** A resolved place, as returned by geocoding. */
+export interface GeoLocation {
+  readonly id: number;
+  readonly name: string;
+  /** First-level administrative area, e.g. "Texas" or "Île-de-France". */
+  readonly region: string | null;
+  readonly country: string | null;
+  /** ISO 3166-1 alpha-2, e.g. "FR". */
+  readonly countryCode: string | null;
+  readonly latitude: number;
+  readonly longitude: number;
+  readonly elevationM: number | null;
+  readonly timezone: string | null;
+  readonly population: number | null;
+}

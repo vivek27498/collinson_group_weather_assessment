@@ -63,6 +63,8 @@ export default tseslint.config(
     rules: {
       // Tests index into fixtures and build objects dynamically; these rules add noise there.
       'security/detect-object-injection': 'off',
+      // Tests read fixture files whose names come from a closed union type, never from input.
+      'security/detect-non-literal-fs-filename': 'off',
       '@typescript-eslint/no-non-null-assertion': 'off',
       '@typescript-eslint/unbound-method': 'off',
     },

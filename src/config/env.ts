@@ -11,6 +11,14 @@ const envSchema = z.object({
   DATABASE_URL: z
     .url()
     .refine((url) => url.startsWith('mysql://'), 'DATABASE_URL must be a mysql:// URL'),
+
+  // Upstream hosts come from config, never from user input (no SSRF). Overridable so load
+  // tests can point at a mock instead of hammering the real (free, rate-limited) API.
+  OPEN_METEO_GEOCODING_URL: z.url().default('https://geocoding-api.open-meteo.com/v1/search'),
+  OPEN_METEO_FORECAST_URL: z.url().default('https://api.open-meteo.com/v1/forecast'),
+  OPEN_METEO_MARINE_URL: z.url().default('https://marine-api.open-meteo.com/v1/marine'),
+  UPSTREAM_TIMEOUT_MS: z.coerce.number().int().min(100).max(30_000).default(3000),
+  UPSTREAM_MAX_RETRIES: z.coerce.number().int().min(0).max(5).default(2),
 });
 
 export type Env = z.infer<typeof envSchema>;
@@ -21,6 +29,12 @@ export interface AppConfig {
   readonly port: number;
   readonly logLevel: Env['LOG_LEVEL'];
   readonly databaseUrl: string;
+  readonly openMeteo: {
+    readonly geocodingUrl: string;
+    readonly forecastUrl: string;
+    readonly marineUrl: string;
+  };
+  readonly upstream: { readonly timeoutMs: number; readonly maxRetries: number };
 }
 
 export class ConfigError extends Error {
@@ -44,5 +58,11 @@ export function loadConfig(source: Record<string, string | undefined> = process.
     port: env.PORT,
     logLevel: env.LOG_LEVEL,
     databaseUrl: env.DATABASE_URL,
+    openMeteo: {
+      geocodingUrl: env.OPEN_METEO_GEOCODING_URL,
+      forecastUrl: env.OPEN_METEO_FORECAST_URL,
+      marineUrl: env.OPEN_METEO_MARINE_URL,
+    },
+    upstream: { timeoutMs: env.UPSTREAM_TIMEOUT_MS, maxRetries: env.UPSTREAM_MAX_RETRIES },
   });
 }
