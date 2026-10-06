@@ -1,0 +1,3 @@
+# Keep LF everywhere so Prettier/CI behave the same on Windows and Linux.
+* text=auto eol=lf
+*.sh text eol=lf

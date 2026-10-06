@@ -1,0 +1,36 @@
+# Local development stack. Passwords below are dev-only defaults; override via .env.
+services:
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root_dev_password}
+      MYSQL_DATABASE: weather
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD:-app_dev_password}
+      MIGRATOR_DB_PASSWORD: ${MIGRATOR_DB_PASSWORD:-migrator_dev_password}
+    ports:
+      - '3306:3306'
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./docker/mysql/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'mysqladmin ping -h 127.0.0.1 -uroot -p"$$MYSQL_ROOT_PASSWORD" --silent']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+
+  app:
+    build: .
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+      LOG_LEVEL: info
+      DATABASE_URL: mysql://app:${APP_DB_PASSWORD:-app_dev_password}@mysql:3306/weather
+    ports:
+      - '4000:4000'
+
+volumes:
+  mysql-data:

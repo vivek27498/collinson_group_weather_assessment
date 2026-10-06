@@ -1,0 +1,33 @@
+# AI usage log
+
+The brief asks us to use AI and show it. I used Claude Code as a pair programmer: it drafted options
+and code, and I made the calls. This log records where I steered it, and what I accepted or rejected.
+
+## Session 1: planning (2026-10-05/06)
+
+- **I asked for** an approach covering business thinking, observability, error handling, design patterns,
+  and unit + load testing.
+- **AI suggested** Postgres + Drizzle + Vitest, plus "multi-tenant-ready seams".
+- **I changed:**
+  - MySQL instead of Postgres.
+  - Prisma instead of Drizzle. I asked about Sequelize; the AI pushed back on its TypeScript support, and I agreed.
+  - Jest instead of Vitest, for team familiarity.
+  - Kept Zod over Joi after discussing how a separate schema and type can drift apart.
+  - **Skipped multi-tenancy** entirely, to keep the scope focused.
+- **Accepted:** hexagonal-lite layering, Strategy scorers, stale-while-revalidate caching, result unions,
+  and a mock upstream for load tests.
+
+## Session 2: M1 scaffold (2026-10-06)
+
+- **I asked for** express-async-errors and one central place for error and success responses.
+  - **AI pointed out** that express-async-errors only patches Express 4, and Express 5 handles async errors
+    natively.
+  - I chose Express 5's native handling, plus a shared error mapper and response envelope (ADR-005).
+- **I asked for** explicit SQL-injection protection, which led to ADR-004 (lint bans, least-privilege DB
+  users, input allow-lists).
+- **Version reality check** (the AI's suggestion, verified with `npm view`):
+  - Apollo Server 4 is end-of-life, so we're using v5.
+  - TypeScript 7 isn't supported by ts-jest or typescript-eslint yet, so it's pinned to 6.0.
+  - Apollo requires graphql v16.
+- **Caught while testing the build:** expected 404s were logged with full stack traces. Now only unexpected
+  errors log a stack trace.
