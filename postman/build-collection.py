@@ -12,6 +12,7 @@ FULL = """query Rank($input: RankingInput!) {
     __typename
     ... on ActivityRankings {
       location { name region country countryCode elevation timezone }
+      alternatives { name region country countryCode }
       forecastFetchedAt
       isStale
       warnings
@@ -26,6 +27,7 @@ FULL = """query Rank($input: RankingInput!) {
       }
     }
     ... on LocationNotFound { message query }
+    ... on InvalidInput { message fieldErrors { field message } }
   }
 }"""
 
@@ -189,7 +191,76 @@ ITEMS = [
         ],
     },
     {
-        "name": "5. Errors and protocol",
+        "name": "5. Ambiguous names (UC6)",
+        "item": [
+            gql(
+                "Paris - which one?",
+                "Resolves to the best match (Paris, France) and lists other places called Paris, so the client can spot ambiguity.",
+                FULL,
+                {"input": {"city": "Paris"}},
+                RANKED_COMMON
+                + [
+                    "pm.test('Resolved to Paris, France', () => pm.expect(r.location.countryCode).to.eql('FR'));",
+                    "pm.test('Lists same-name alternatives, e.g. Paris, Texas', () => { pm.expect(r.alternatives.length).to.be.within(1, 5); pm.expect(r.alternatives.some(a => a.countryCode === 'US')).to.eql(true); });",
+                ],
+            ),
+            gql(
+                "Paris, US (countryCode picks it)",
+                "Same name, disambiguated with countryCode (case-insensitive).",
+                FULL,
+                {"input": {"city": "Paris", "countryCode": "us"}},
+                RANKED_COMMON
+                + [
+                    "pm.test('Resolved to a Paris in the US', () => pm.expect(r.location.countryCode).to.eql('US'));",
+                ],
+            ),
+        ],
+    },
+    {
+        "name": "6. Validation and security",
+        "item": [
+            gql(
+                "SQL injection payload in city",
+                "Allow-list validation rejects it before anything is looked up or stored.",
+                FULL,
+                {"input": {"city": "'; DROP TABLE locations;--"}},
+                [
+                    "const r = pm.response.json().data.activityRankings;",
+                    "pm.test('InvalidInput on the city field', () => { pm.expect(r.__typename).to.eql('InvalidInput'); pm.expect(r.fieldErrors[0].field).to.eql('city'); });",
+                ],
+            ),
+            gql(
+                "XSS payload in city",
+                "Same allow-list: markup is never accepted.",
+                FULL,
+                {"input": {"city": "<script>alert(1)</script>"}},
+                [
+                    "pm.test('InvalidInput', () => pm.expect(pm.response.json().data.activityRankings.__typename).to.eql('InvalidInput'));",
+                ],
+            ),
+            gql(
+                "Invalid countryCode",
+                "Must be a 2-letter ISO code.",
+                FULL,
+                {"input": {"city": "Paris", "countryCode": "FRA"}},
+                [
+                    "const r = pm.response.json().data.activityRankings;",
+                    "pm.test('InvalidInput on countryCode', () => { pm.expect(r.__typename).to.eql('InvalidInput'); pm.expect(r.fieldErrors[0].field).to.eql('countryCode'); });",
+                ],
+            ),
+            gql(
+                "Alias amplification (4 root fields)",
+                "One request asking for many places via aliases would multiply upstream calls. Rejected during validation (max 3).",
+                '{ a: activityRankings(input: {city: "Paris"}) { __typename } b: activityRankings(input: {city: "Rome"}) { __typename } c: activityRankings(input: {city: "Oslo"}) { __typename } d: activityRankings(input: {city: "Bern"}) { __typename } }',
+                {},
+                [
+                    "pm.test('400 Too many root fields', () => { pm.response.to.have.status(400); pm.expect(pm.response.json().errors[0].message).to.match(/Too many root fields/); });",
+                ],
+            ),
+        ],
+    },
+    {
+        "name": "7. Errors and protocol",
         "item": [
             gql(
                 "Invalid query (unknown field)",

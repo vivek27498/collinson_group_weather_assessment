@@ -21,10 +21,15 @@ Defence in depth: no single layer is trusted on its own.
    - Secrets are redacted in logs.
    - Config errors name the bad variable but never echo its value.
    - Caller-supplied request IDs are validated to prevent log injection.
-7. **HTTP hardening.** helmet headers, `x-powered-by` off and a 10 kb body limit. Rate limiting, GraphQL
-   depth limits and turning introspection off in production arrive with the GraphQL layer (M6).
+7. **HTTP hardening.** helmet headers, `x-powered-by` off and a 10 kb body limit.
+   - **Implemented in slice 2** (for /graphql): a per-IP rate limit (429 envelope + RateLimit headers),
+     a max-root-fields rule (blocks alias amplification), a depth limit, no batching, introspection off
+     in production, and Apollo CSRF prevention.
+   - The rate-limit store is in memory, so limits are per instance. Behind a load balancer with N
+     instances, use a shared store (Redis) or enforce the limit at the gateway.
 8. **Supply chain.** `npm audit` runs on production dependencies in CI, and Dependabot covers npm and Actions.
 9. **Container.** A multi-stage image with production dependencies only, running as the non-root `node` user.
 
-Tests with injection payloads (`'; DROP TABLE locations;--`, `Paris' OR '1'='1`) come with the input
-layer (M6). They assert that the tables still exist afterwards.
+Tests with injection payloads (`'; DROP TABLE locations;--`, `Paris' OR '1'='1`, XSS, log injection,
+path traversal) are in `test/unit/application/ranking-input.test.ts` and the GraphQL integration tests.
+They assert that the input is rejected before any provider call.

@@ -1,4 +1,5 @@
 import type { Express } from 'express';
+import { getIntrospectionQuery } from 'graphql';
 import nock from 'nock';
 import request from 'supertest';
 import { createApp } from '../../src/app';
@@ -29,8 +30,15 @@ const RANK_QUERY = /* GraphQL */ `
           name
           country
           countryCode
+          region
           elevation
           timezone
+        }
+        alternatives {
+          name
+          country
+          countryCode
+          region
         }
         forecastFetchedAt
         isStale
@@ -54,6 +62,13 @@ const RANK_QUERY = /* GraphQL */ `
         message
         query
       }
+      ... on InvalidInput {
+        message
+        fieldErrors {
+          field
+          message
+        }
+      }
     }
   }
 `;
@@ -73,6 +88,16 @@ interface Ranked {
     bestDay: string | null;
     days: { date: string; score: number | null; rating: string; reasons: string[] }[];
   }[];
+}
+
+type RankedWithAlternatives = Ranked & {
+  location: { region: string };
+  alternatives: { countryCode: string; region: string }[];
+};
+
+interface InvalidInputResult {
+  __typename: string;
+  fieldErrors: { field: string; message: string }[];
 }
 
 const reply = (fixture: OpenMeteoFixture) =>
@@ -97,7 +122,10 @@ function mockPlace(
     .reply(...reply(marine));
 }
 
-async function buildApp(isProduction = false): Promise<{ app: Express; graphql: GraphQLHandler }> {
+async function buildApp(
+  isProduction = false,
+  rateLimitMax = 1000,
+): Promise<{ app: Express; graphql: GraphQLHandler }> {
   const config = loadConfig({
     NODE_ENV: isProduction ? 'production' : 'test',
     DATABASE_URL: 'mysql://app:x@localhost:3307/weather',
@@ -108,8 +136,16 @@ async function buildApp(isProduction = false): Promise<{ app: Express; graphql: 
   const graphql = await createGraphQLHandler({
     rankingService: createRankingService(config, logger),
     isProduction,
+    limits: config.graphql,
   });
-  return { app: createApp({ logger, graphqlHandler: graphql.handler }), graphql };
+  return {
+    app: createApp({
+      logger,
+      graphqlHandler: graphql.handler,
+      rateLimit: { windowMs: 60_000, max: rateLimitMax },
+    }),
+    graphql,
+  };
 }
 
 const rank = (app: Express, input: Record<string, string>) =>
@@ -207,6 +243,74 @@ describe('GraphQL API: activityRankings', () => {
     });
   });
 
+  describe('use case 6: ambiguous place names', () => {
+    it('resolves "Paris" to France and lists same-name alternatives (Texas, ...)', async () => {
+      mockPlace('geocode-paris', 'forecast-chamonix', 'marine-inland-chamonix');
+
+      const res = await rank(app, { city: 'Paris' });
+
+      const result = (res.body as { data: { activityRankings: RankedWithAlternatives } }).data
+        .activityRankings;
+      expect(result.location.countryCode).toBe('FR');
+      expect(result.alternatives.length).toBeGreaterThan(0);
+      expect(result.alternatives.length).toBeLessThanOrEqual(5);
+      expect(result.alternatives).toContainEqual(
+        expect.objectContaining({ countryCode: 'US', region: 'Texas' }),
+      );
+    });
+
+    it('a countryCode picks the intended place, sent to the geocoder upper-cased', async () => {
+      const geocode = nock(GEOCODING)
+        .get('/v1/search')
+        .query((q) => q.name === 'Paris' && q.countryCode === 'US')
+        .reply(...reply('geocode-paris-us'));
+      nock(FORECAST)
+        .get('/v1/forecast')
+        .query(true)
+        .reply(...reply('forecast-chamonix'));
+      nock(MARINE)
+        .get('/v1/marine')
+        .query(true)
+        .reply(...reply('marine-inland-chamonix'));
+
+      const res = await rank(app, { city: 'Paris', countryCode: 'us' });
+
+      expect(geocode.isDone()).toBe(true);
+      const result = (res.body as { data: { activityRankings: RankedWithAlternatives } }).data
+        .activityRankings;
+      expect(result.location).toMatchObject({ countryCode: 'US', region: 'Texas' });
+    });
+  });
+
+  describe('input validation and injection payloads', () => {
+    it.each([
+      ["'; DROP TABLE locations;--"],
+      ["Paris' OR '1'='1"],
+      ['<script>alert(1)</script>'],
+      [''],
+    ])('returns InvalidInput for %p without calling any provider', async (city) => {
+      // No nock interceptors are registered and real network is disabled: any outbound call
+      // would fail this test.
+      const res = await rank(app, { city });
+
+      expect(res.status).toBe(200);
+      const result = (res.body as { data: { activityRankings: InvalidInputResult } }).data
+        .activityRankings;
+      expect(result.__typename).toBe('InvalidInput');
+      expect(result.fieldErrors[0]?.field).toBe('city');
+    });
+
+    it('reports an invalid countryCode', async () => {
+      const res = await rank(app, { city: 'Paris', countryCode: 'FRA' });
+
+      const result = (res.body as { data: { activityRankings: InvalidInputResult } }).data
+        .activityRankings;
+      expect(result.fieldErrors).toEqual([
+        { field: 'countryCode', message: expect.any(String) as unknown },
+      ]);
+    });
+  });
+
   describe('provider failures', () => {
     it('degrades gracefully when only marine data is down', async () => {
       nock(GEOCODING)
@@ -278,12 +382,59 @@ describe('GraphQL API: activityRankings', () => {
       expect(res.text).toMatch(/CSRF/i);
     });
 
+    it('rejects too many root fields (alias amplification) before calling any provider', async () => {
+      const aliases = ['a', 'b', 'c', 'd']
+        .map((alias) => `${alias}: activityRankings(input: { city: "Paris" }) { __typename }`)
+        .join(' ');
+
+      const res = await request(app)
+        .post('/graphql')
+        .send({ query: `{ ${aliases} }` });
+
+      expect(res.status).toBe(400);
+      const body = res.body as { errors: { message: string }[] };
+      expect(body.errors[0]?.message).toMatch(/Too many root fields: 4 \(max 3\)/);
+    });
+
+    it('rejects batched requests (they would bypass per-request limits)', async () => {
+      const res = await request(app)
+        .post('/graphql')
+        .send([{ query: '{ __typename }' }, { query: '{ __typename }' }]);
+
+      expect(res.status).toBe(400);
+    });
+
+    it('rate-limits /graphql per client with a 429 envelope and RateLimit headers', async () => {
+      const limited = await buildApp(false, 2);
+      try {
+        const send = () => request(limited.app).post('/graphql').send({ query: '{ __typename }' });
+        await send();
+        await send();
+        const res = await send();
+
+        expect(res.status).toBe(429);
+        expect(res.body).toMatchObject({ success: false, error: { code: 'RATE_LIMITED' } });
+        expect(res.headers['ratelimit-policy']).toBeDefined();
+        // Health probes are never rate-limited.
+        expect((await request(limited.app).get('/healthz')).status).toBe(200);
+      } finally {
+        await limited.graphql.stop();
+      }
+    });
+
     it('allows introspection in development (Postman schema explorer)', async () => {
       const res = await request(app)
         .post('/graphql')
         .send({ query: '{ __schema { queryType { name } } }' });
 
       expect(res.body).toEqual({ data: { __schema: { queryType: { name: 'Query' } } } });
+    });
+
+    it('still allows the standard (deep) introspection query that Postman sends', async () => {
+      const res = await request(app).post('/graphql').send({ query: getIntrospectionQuery() });
+
+      expect(res.status).toBe(200);
+      expect((res.body as { errors?: unknown }).errors).toBeUndefined();
     });
 
     it('disables introspection in production', async () => {

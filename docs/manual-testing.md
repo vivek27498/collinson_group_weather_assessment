@@ -66,7 +66,9 @@ and `warnings` contains _"Sea-state data is temporarily unavailable, so surfing 
 
 (Remove the variables afterwards with `Remove-Item Env:PORT, Env:OPEN_METEO_FORECAST_URL, Env:OPEN_METEO_MARINE_URL`.)
 
+**Rate limiting:** start with `$env:RATE_LIMIT_MAX=3; npm run dev` and send any request 4 times. The 4th
+returns HTTP 429 with `error.code = "RATE_LIMITED"`, and the response headers include `RateLimit-Policy` / `RateLimit`.
+
 ## 5. Coming in later slices
 
-- **Slice 2:** "Paris" vs "Paris, US" disambiguation, input validation and injection payloads, query depth and rate limits.
 - **Slice 3:** persistence and caching. The second call for a city is served from MySQL, and stale data is served during an outage (`isStale: true`).

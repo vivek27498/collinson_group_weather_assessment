@@ -20,6 +20,7 @@ async function main(): Promise<void> {
   const graphql = await createGraphQLHandler({
     rankingService,
     isProduction: config.isProduction,
+    limits: config.graphql,
   });
 
   // /readyz needs the controller, and the controller needs the server the app creates.
@@ -28,6 +29,7 @@ async function main(): Promise<void> {
     logger,
     isShuttingDown: () => controller.isShuttingDown(),
     graphqlHandler: graphql.handler,
+    rateLimit: config.rateLimit,
   });
 
   const server = app.listen(config.port, () => {
