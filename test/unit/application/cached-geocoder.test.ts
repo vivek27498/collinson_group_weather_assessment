@@ -85,6 +85,20 @@ describe('CachedGeocoder', () => {
     expect(inner.search).toHaveBeenCalledTimes(2);
   });
 
+  it('single-flight: concurrent identical lookups share one provider call and one cache write', async () => {
+    const { geocoder, inner, cache } = setup();
+    const put = jest.spyOn(cache, 'put');
+
+    const results = await Promise.all(
+      Array.from({ length: 50 }, () => geocoder.search({ name: 'Paris' })),
+    );
+
+    expect(inner.search).toHaveBeenCalledTimes(1);
+    expect(put).toHaveBeenCalledTimes(1);
+    expect(results.every((r) => r[0]?.id === paris.id)).toBe(true);
+    expect(results[0]).not.toBe(results[1]); // each caller gets its own array
+  });
+
   it('still answers when the cache is unavailable (best-effort cache)', async () => {
     const { geocoder, cache, inner } = setup();
     cache.failReads = true;

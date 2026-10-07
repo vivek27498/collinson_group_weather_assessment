@@ -25,5 +25,5 @@
     "skipLibCheck": true,
     "sourceMap": true
   },
-  "include": ["src", "test"]
+  "include": ["src", "test", "load/mock-upstream"]
 }

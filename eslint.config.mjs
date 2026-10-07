@@ -59,7 +59,7 @@ export default tseslint.config(
     languageOptions: { sourceType: 'commonjs' },
   },
   {
-    files: ['test/**/*.ts'],
+    files: ['test/**/*.ts', 'load/**/*.ts'],
     rules: {
       // Tests index into fixtures and build objects dynamically; these rules add noise there.
       'security/detect-object-injection': 'off',
