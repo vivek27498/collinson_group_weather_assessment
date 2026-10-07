@@ -29,6 +29,19 @@ describe('createApp', () => {
     expect(draining.body).toMatchObject({ success: false, error: { code: 'SHUTTING_DOWN' } });
   });
 
+  it('GET /readyz is 503 DEPENDENCY_UNAVAILABLE when the readiness check fails (e.g. DB down)', async () => {
+    const dbDownApp = createApp({
+      logger: createLogger({ level: 'silent' }),
+      readinessCheck: () => Promise.reject(new Error('connect ECONNREFUSED 10.0.0.9:3306')),
+    });
+
+    const res = await request(dbDownApp).get('/readyz');
+
+    expect(res.status).toBe(503);
+    expect(res.body).toMatchObject({ success: false, error: { code: 'DEPENDENCY_UNAVAILABLE' } });
+    expect(JSON.stringify(res.body)).not.toContain('10.0.0.9');
+  });
+
   it('sets security headers and hides the framework', async () => {
     const res = await request(app).get('/healthz');
 

@@ -20,16 +20,29 @@ services:
       retries: 20
       start_period: 20s
 
-  app:
-    build: .
+  # Applies migrations as `migrator` (DDL rights), then exits. The app never holds DDL rights.
+  migrate:
+    build:
+      context: .
+      target: migrate
     depends_on:
       mysql:
         condition: service_healthy
     environment:
+      MIGRATE_DATABASE_URL: mysql://migrator:${MIGRATOR_DB_PASSWORD:-migrator_dev_password}@mysql:3306/weather
+
+  app:
+    build:
+      context: .
+      target: runtime
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    environment:
       NODE_ENV: production
       PORT: 4000
       LOG_LEVEL: info
-      DATABASE_URL: mysql://app:${APP_DB_PASSWORD:-app_dev_password}@mysql:3306/weather
+      DATABASE_URL: mysql://app:${APP_DB_PASSWORD:-app_dev_password}@mysql:3306/weather?allowPublicKeyRetrieval=true
     ports:
       - '4000:4000'
 

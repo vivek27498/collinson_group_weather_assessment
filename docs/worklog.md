@@ -118,3 +118,27 @@ Unpolished notes on how the work is going, newest last. Cuts and the reasons for
   introspection fields, and our schema has no recursive types, so real queries can't exceed depth ~4.
   The depth limit is defence-in-depth, tested at unit level with a low limit. Introspection itself is off in production.
 - Tests: 292 passing. Postman: 19 requests / 53 assertions via newman.
+
+## 2026-10-07: Slice 3, persistence and caching (UC8)
+
+- Prisma 7 (MariaDB driver adapter) on MySQL 8.4. Schema: locations, geocode_queries,
+  forecast_snapshots (one per 0.1° grid cell), daily_forecasts. Migrations run as `migrator` via a
+  one-shot compose service; the app connects as `app` (DML only).
+- ForecastService: cache-aside + stale-while-revalidate + single-flight. CachedGeocoder: decorator
+  with positive and negative TTLs. RankingService is now just orchestration.
+- /readyz pings MySQL. Shutdown order: Apollo → drain background refreshes → DB disconnect.
+- Measured: cold Chamonix call 2.2 s, cached 44 ms. Fresh compose stack: 1.2 s cold, 17-22 ms cached.
+- **Four real bugs found by verifying for real:**
+  1. **MySQL 8 auth:** the MariaDB driver couldn't authenticate against a _fresh_ MySQL
+     (`caching_sha2_password` needs TLS or RSA key retrieval). Local dev only worked because the
+     server had cached the app user's credentials from an earlier CLI login. Caught by Testcontainers.
+     Dev/compose now use `allowPublicKeyRetrieval=true`; production should use TLS (ADR-004).
+  2. **Timeout too tight:** Open-Meteo's forecast endpoint measured 1.4-3.1 s; a 3 s timeout aborted
+     healthy responses and the retries added load. Now 6 s, 1 retry.
+  3. **Apollo's own signal handlers** re-sent SIGTERM after stopping. Our controller treated that as
+     a second Ctrl+C and force-exited (exit 1), skipping the DB disconnect. Found with `docker stop`;
+     fixed with `stopOnTerminationSignals: false`, and it now exits 0.
+  4. **Jest + Prisma 7:** the generated client uses `.js` import specifiers and a dynamic import();
+     fixed with a moduleNameMapper and `--experimental-vm-modules`.
+- Tests: 334 passing, including 12 against a real MySQL in Testcontainers (round-trips, no timezone
+  shift, utf8mb4, injection payloads stored as data with the schema intact). Postman: 22 requests, 58 assertions.

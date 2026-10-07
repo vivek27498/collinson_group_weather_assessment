@@ -1,7 +1,10 @@
 import { createApp } from './app';
 import { loadConfig } from './config/env';
-import { createRankingService } from './container';
+import { createServices } from './container';
 import { createGraphQLHandler } from './graphql/create-graphql-handler';
+import { createDatabase, pingDatabase } from './infrastructure/db/prisma-client';
+import { PrismaForecastRepository } from './infrastructure/db/prisma-forecast-repository';
+import { PrismaGeocodeCache } from './infrastructure/db/prisma-geocode-cache';
 import { createLogger } from './observability/logger';
 import {
   createShutdownController,
@@ -16,7 +19,11 @@ async function main(): Promise<void> {
   const config = loadConfig();
   const logger = createLogger({ level: config.logLevel, pretty: config.env === 'development' });
 
-  const rankingService = createRankingService(config, logger);
+  const db = createDatabase(config.databaseUrl);
+  const { rankingService, forecastService } = createServices(config, logger, {
+    forecasts: new PrismaForecastRepository(db),
+    geocodes: new PrismaGeocodeCache(db),
+  });
   const graphql = await createGraphQLHandler({
     rankingService,
     isProduction: config.isProduction,
@@ -28,6 +35,7 @@ async function main(): Promise<void> {
   const app = createApp({
     logger,
     isShuttingDown: () => controller.isShuttingDown(),
+    readinessCheck: () => pingDatabase(db),
     graphqlHandler: graphql.handler,
     rateLimit: config.rateLimit,
   });
@@ -40,8 +48,13 @@ async function main(): Promise<void> {
     server,
     logger,
     timeoutMs: 10_000,
-    // Closed in reverse order after the HTTP server drains. The DB pool joins this list in slice 3.
-    resources: [{ name: 'apollo', close: graphql.stop }],
+    // Closed in REVERSE order after the HTTP server drains: stop Apollo, let background
+    // forecast refreshes finish writing, then release the DB pool.
+    resources: [
+      { name: 'database', close: () => db.$disconnect() },
+      { name: 'background-refreshes', close: () => forecastService.drain() },
+      { name: 'apollo', close: graphql.stop },
+    ],
   });
   registerProcessHandlers(controller, logger);
 }

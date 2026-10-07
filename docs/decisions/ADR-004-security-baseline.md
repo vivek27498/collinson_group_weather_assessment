@@ -28,7 +28,12 @@ Defence in depth: no single layer is trusted on its own.
    - The rate-limit store is in memory, so limits are per instance. Behind a load balancer with N
      instances, use a shared store (Redis) or enforce the limit at the gateway.
 8. **Supply chain.** `npm audit` runs on production dependencies in CI, and Dependabot covers npm and Actions.
-9. **Container.** A multi-stage image with production dependencies only, running as the non-root `node` user.
+9. **DB connection auth.** MySQL 8's default `caching_sha2_password` needs either TLS or RSA public key
+   retrieval on first connect. Dev/compose use `allowPublicKeyRetrieval=true` (private network).
+   Production should use TLS (`?ssl=true`) instead, because key retrieval without TLS is open to a
+   man-in-the-middle swapping the key. Found by the Testcontainers tests: the local dev DB had only
+   worked because the server had cached the app user's credentials from an earlier CLI login.
+10. **Container.** A multi-stage image with production dependencies only, running as the non-root `node` user.
 
 Tests with injection payloads (`'; DROP TABLE locations;--`, `Paris' OR '1'='1`, XSS, log injection,
 path traversal) are in `test/unit/application/ranking-input.test.ts` and the GraphQL integration tests.

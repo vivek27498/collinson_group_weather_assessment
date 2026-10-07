@@ -583,7 +583,113 @@
       ]
     },
     {
-      "name": "7. Errors and protocol",
+      "name": "7. Persistence and caching (UC8)",
+      "item": [
+        {
+          "name": "First call - Lisbon (fetches or uses cache)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const r = pm.response.json().data.activityRankings;",
+                  "pm.collectionVariables.set('lisbonFetchedAt', r.forecastFetchedAt);",
+                  "pm.test('Ranked', () => pm.expect(r.__typename).to.eql('ActivityRankings'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "description": "Stores forecastFetchedAt so the next request can compare. On a cold cache this call goes to Open-Meteo and writes MySQL.",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "query Cached($input: RankingInput!) {\n  activityRankings(input: $input) {\n    __typename\n    ... on ActivityRankings {\n      location { name country }\n      forecastFetchedAt\n      isStale\n      activities { rank activity weeklyRating }\n    }\n  }\n}",
+                "variables": "{\n  \"input\": {\n    \"city\": \"Lisbon\"\n  }\n}"
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/graphql",
+              "host": ["{{baseUrl}}"],
+              "path": ["graphql"]
+            }
+          }
+        },
+        {
+          "name": "Second call - served from MySQL",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const r = pm.response.json().data.activityRankings;",
+                  "pm.test('Same data as the first call (cache hit, case-insensitive key)', () => pm.expect(r.forecastFetchedAt).to.eql(pm.collectionVariables.get('lisbonFetchedAt')));",
+                  "pm.test('Fresh (not stale)', () => pm.expect(r.isStale).to.eql(false));",
+                  "pm.test('Fast (< 500 ms)', () => pm.expect(pm.response.responseTime).to.be.below(500));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "description": "Same forecastFetchedAt as the first call = no new provider call. Compare the response times of the two requests.",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "query Cached($input: RankingInput!) {\n  activityRankings(input: $input) {\n    __typename\n    ... on ActivityRankings {\n      location { name country }\n      forecastFetchedAt\n      isStale\n      activities { rank activity weeklyRating }\n    }\n  }\n}",
+                "variables": "{\n  \"input\": {\n    \"city\": \"lisbon\"\n  }\n}"
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/graphql",
+              "host": ["{{baseUrl}}"],
+              "path": ["graphql"]
+            }
+          }
+        },
+        {
+          "name": "Readiness includes the database",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 ready (DB reachable)', () => pm.expect(pm.response.json().data.status).to.eql('ready'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "description": "/readyz pings MySQL. Stop the DB container and it returns 503 DEPENDENCY_UNAVAILABLE.",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/readyz",
+              "host": ["{{baseUrl}}"],
+              "path": ["readyz"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "8. Errors and protocol",
       "item": [
         {
           "name": "Invalid query (unknown field)",

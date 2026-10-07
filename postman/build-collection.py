@@ -42,6 +42,19 @@ SUMMARY = """query Summary($input: RankingInput!) {
 }"""
 
 
+CACHE_QUERY = """query Cached($input: RankingInput!) {
+  activityRankings(input: $input) {
+    __typename
+    ... on ActivityRankings {
+      location { name country }
+      forecastFetchedAt
+      isStale
+      activities { rank activity weeklyRating }
+    }
+  }
+}"""
+
+
 def tests_event(lines):
     return [{"listen": "test", "script": {"type": "text/javascript", "exec": lines}}]
 
@@ -260,7 +273,41 @@ ITEMS = [
         ],
     },
     {
-        "name": "7. Errors and protocol",
+        "name": "7. Persistence and caching (UC8)",
+        "item": [
+            gql(
+                "First call - Lisbon (fetches or uses cache)",
+                "Stores forecastFetchedAt so the next request can compare. On a cold cache this call goes to Open-Meteo and writes MySQL.",
+                CACHE_QUERY,
+                {"input": {"city": "Lisbon"}},
+                [
+                    "const r = pm.response.json().data.activityRankings;",
+                    "pm.collectionVariables.set('lisbonFetchedAt', r.forecastFetchedAt);",
+                    "pm.test('Ranked', () => pm.expect(r.__typename).to.eql('ActivityRankings'));",
+                ],
+            ),
+            gql(
+                "Second call - served from MySQL",
+                "Same forecastFetchedAt as the first call = no new provider call. Compare the response times of the two requests.",
+                CACHE_QUERY,
+                {"input": {"city": "lisbon"}},
+                [
+                    "const r = pm.response.json().data.activityRankings;",
+                    "pm.test('Same data as the first call (cache hit, case-insensitive key)', () => pm.expect(r.forecastFetchedAt).to.eql(pm.collectionVariables.get('lisbonFetchedAt')));",
+                    "pm.test('Fresh (not stale)', () => pm.expect(r.isStale).to.eql(false));",
+                    "pm.test('Fast (< 500 ms)', () => pm.expect(pm.response.responseTime).to.be.below(500));",
+                ],
+            ),
+            get(
+                "Readiness includes the database",
+                "/readyz pings MySQL. Stop the DB container and it returns 503 DEPENDENCY_UNAVAILABLE.",
+                "/readyz",
+                ["pm.test('200 ready (DB reachable)', () => pm.expect(pm.response.json().data.status).to.eql('ready'));"],
+            ),
+        ],
+    },
+    {
+        "name": "8. Errors and protocol",
         "item": [
             gql(
                 "Invalid query (unknown field)",

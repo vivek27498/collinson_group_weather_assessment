@@ -14,6 +14,8 @@ export interface AppDependencies {
   readonly isShuttingDown?: () => boolean;
   /** The GraphQL endpoint (Apollo). Optional so infrastructure tests can build the bare app. */
   readonly graphqlHandler?: RequestHandler;
+  /** Dependency check for /readyz (e.g. a DB ping). Throwing means "not ready". */
+  readonly readinessCheck?: () => Promise<void>;
   /** Per-IP limit on /graphql. Health probes are never limited. */
   readonly rateLimit?: { readonly windowMs: number; readonly max: number };
 }
@@ -30,6 +32,7 @@ export function createApp({
   logger,
   isShuttingDown = () => false,
   graphqlHandler,
+  readinessCheck = () => Promise.resolve(),
   rateLimit: rateLimitOptions = { windowMs: 60_000, max: 60 },
 }: AppDependencies): Express {
   const app = express();
@@ -53,10 +56,19 @@ export function createApp({
     sendSuccess(req, res, { status: 'ok' });
   });
 
-  // Readiness: should this instance receive traffic? (A DB ping is added with persistence in M4.)
-  app.get('/readyz', (req, res) => {
+  // Readiness: should this instance receive traffic? Not while draining, and not if the database
+  // is unreachable (the load balancer then routes to healthy instances).
+  app.get('/readyz', async (req, res) => {
     if (isShuttingDown()) {
       throw new ServiceUnavailableError('Shutting down', { code: 'SHUTTING_DOWN' });
+    }
+    try {
+      await readinessCheck();
+    } catch (err) {
+      throw new ServiceUnavailableError('A dependency is unavailable', {
+        code: 'DEPENDENCY_UNAVAILABLE',
+        cause: err,
+      });
     }
     sendSuccess(req, res, { status: 'ready' });
   });

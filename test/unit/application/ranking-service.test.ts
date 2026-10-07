@@ -1,20 +1,10 @@
-import type {
-  Geocoder,
-  MarineForecastProvider,
-  WeatherForecastProvider,
-} from '../../../src/application/ports';
-import {
-  joinByDate,
-  MARINE_UNAVAILABLE_WARNING,
-  RankingService,
-  sameNameAlternatives,
-} from '../../../src/application/ranking-service';
+import type { Forecast, ForecastSource } from '../../../src/application/forecast-service';
+import type { Coordinates, Geocoder } from '../../../src/application/ports';
+import { RankingService, sameNameAlternatives } from '../../../src/application/ranking-service';
 import { defaultScoringConfig } from '../../../src/config/scoring';
 import { createScorers } from '../../../src/domain/scoring/registry';
 import { Activity, type GeoLocation } from '../../../src/domain/types';
-import { UpstreamRequestError } from '../../../src/infrastructure/http/json-http-client';
-import { createLogger } from '../../../src/observability/logger';
-import { aDay, aMarineDay } from '../../support/builders';
+import { aDay, aMarineDay, conditions } from '../../support/builders';
 
 const biarritz: GeoLocation = {
   id: 1,
@@ -28,58 +18,50 @@ const biarritz: GeoLocation = {
   timezone: 'Europe/Paris',
   population: 25_000,
 };
-const fixedNow = new Date('2026-10-07T09:00:00Z');
+const fetchedAt = new Date('2026-10-07T09:00:00Z');
+const aForecast = (overrides: Partial<Forecast> = {}): Forecast => ({
+  days: [
+    conditions(aDay({ date: '2026-10-07' }), aMarineDay({ date: '2026-10-07' })),
+    conditions(aDay({ date: '2026-10-08' }), aMarineDay({ date: '2026-10-08' })),
+  ],
+  fetchedAt,
+  isStale: false,
+  warnings: [],
+  ...overrides,
+});
 
-/** In-memory fakes for every port: the service is tested without HTTP or a database. */
-function setup(overrides: {
-  locations?: GeoLocation[];
-  marine?: MarineForecastProvider['getDailyMarine'];
-  forecast?: WeatherForecastProvider['getDailyForecast'];
-}) {
+/** Fakes for both collaborators: ranking is tested without HTTP, a database or a cache. */
+function setup(options: { locations?: GeoLocation[]; forecast?: () => Promise<Forecast> } = {}) {
   const geocoder: jest.Mocked<Geocoder> = {
-    search: jest.fn().mockResolvedValue(overrides.locations ?? [biarritz]),
+    search: jest.fn().mockResolvedValue(options.locations ?? [biarritz]),
   };
-  const forecast: jest.Mocked<WeatherForecastProvider> = {
-    getDailyForecast: jest.fn(
-      overrides.forecast ??
-        (() => Promise.resolve([aDay({ date: '2026-10-07' }), aDay({ date: '2026-10-08' })])),
-    ),
-  };
-  const marine: jest.Mocked<MarineForecastProvider> = {
-    getDailyMarine: jest.fn(
-      overrides.marine ??
-        (() =>
-          Promise.resolve([
-            aMarineDay({ date: '2026-10-07' }),
-            aMarineDay({ date: '2026-10-08' }),
-          ])),
+  const forecasts: jest.Mocked<ForecastSource> = {
+    getForecast: jest.fn<Promise<Forecast>, [Coordinates]>(
+      options.forecast ?? (() => Promise.resolve(aForecast())),
     ),
   };
   const service = new RankingService({
     geocoder,
-    forecast,
-    marine,
+    forecasts,
     scorers: createScorers(defaultScoringConfig),
     scoringConfig: defaultScoringConfig,
-    clock: { now: () => fixedNow },
-    logger: createLogger({ level: 'silent' }),
   });
-  return { service, geocoder, forecast, marine };
+  return { service, geocoder, forecasts };
 }
 
 describe('RankingService', () => {
-  it('geocodes, fetches weather + marine for the top match, and ranks all activities', async () => {
-    const { service, geocoder, forecast, marine } = setup({});
+  it('validates, geocodes, gets the forecast for the top match, and ranks all activities', async () => {
+    const { service, geocoder, forecasts } = setup();
 
-    const outcome = await service.rank({ city: 'Biarritz', countryCode: 'FR' });
+    const outcome = await service.rank({ city: '  Biarritz ', countryCode: 'fr' });
 
     expect(geocoder.search).toHaveBeenCalledWith({ name: 'Biarritz', countryCode: 'FR' });
-    expect(forecast.getDailyForecast).toHaveBeenCalledWith({ latitude: 43.48, longitude: -1.55 });
-    expect(marine.getDailyMarine).toHaveBeenCalledWith({ latitude: 43.48, longitude: -1.55 });
+    expect(forecasts.getForecast).toHaveBeenCalledWith(biarritz);
     expect(outcome).toMatchObject({
       kind: 'ranked',
       location: biarritz,
-      forecastFetchedAt: fixedNow,
+      alternatives: [],
+      forecastFetchedAt: fetchedAt,
       isStale: false,
       warnings: [],
     });
@@ -87,65 +69,52 @@ describe('RankingService', () => {
     expect(outcome.activities.map((a) => a.activity).sort()).toEqual(
       Object.values(Activity).sort(),
     );
-    expect(outcome.activities.find((a) => a.activity === Activity.Surfing)?.applicable).toBe(true);
   });
 
-  it('returns locationNotFound (a value, not an exception) and skips the weather calls', async () => {
-    const { service, forecast, marine } = setup({ locations: [] });
-
-    await expect(service.rank({ city: 'Atlantis' })).resolves.toEqual({
-      kind: 'locationNotFound',
-      query: { name: 'Atlantis' },
+  it('passes freshness and warnings from the forecast straight through', async () => {
+    const { service } = setup({
+      forecast: () =>
+        Promise.resolve(aForecast({ isStale: true, warnings: ['sea data unavailable'] })),
     });
-    expect(forecast.getDailyForecast).not.toHaveBeenCalled();
-    expect(marine.getDailyMarine).not.toHaveBeenCalled();
+
+    await expect(service.rank({ city: 'Biarritz' })).resolves.toMatchObject({
+      isStale: true,
+      warnings: ['sea data unavailable'],
+    });
   });
 
-  it('rejects invalid input without calling any provider', async () => {
-    const { service, geocoder, forecast } = setup({});
+  it('rejects invalid input without calling any collaborator', async () => {
+    const { service, geocoder, forecasts } = setup();
 
     const outcome = await service.rank({ city: "'; DROP TABLE locations;--" });
 
     expect(outcome).toMatchObject({ kind: 'invalidInput', errors: [{ path: 'city' }] });
     expect(geocoder.search).not.toHaveBeenCalled();
-    expect(forecast.getDailyForecast).not.toHaveBeenCalled();
+    expect(forecasts.getForecast).not.toHaveBeenCalled();
   });
 
-  it('passes the normalised query to the geocoder', async () => {
-    const { service, geocoder } = setup({});
+  it('returns locationNotFound (a value, not an exception) and skips the forecast', async () => {
+    const { service, forecasts } = setup({ locations: [] });
 
-    await service.rank({ city: '  Biarritz  ', countryCode: 'fr' });
-
-    expect(geocoder.search).toHaveBeenCalledWith({ name: 'Biarritz', countryCode: 'FR' });
+    await expect(service.rank({ city: 'Atlantis' })).resolves.toEqual({
+      kind: 'locationNotFound',
+      query: { name: 'Atlantis' },
+    });
+    expect(forecasts.getForecast).not.toHaveBeenCalled();
   });
 
   it('returns same-name alternatives so ambiguous names are visible', async () => {
-    const parisTexas = { ...biarritz, id: 2, name: 'Biarritz', countryCode: 'US', region: 'Texas' };
-    const { service } = setup({ locations: [biarritz, parisTexas] });
+    const texan = { ...biarritz, id: 2, countryCode: 'US', region: 'Texas' };
+    const { service } = setup({ locations: [biarritz, texan] });
 
     const outcome = await service.rank({ city: 'Biarritz' });
 
     if (outcome.kind !== 'ranked') throw new Error('expected ranked');
-    expect(outcome.location.countryCode).toBe('FR');
-    expect(outcome.alternatives).toEqual([parisTexas]);
+    expect(outcome.alternatives).toEqual([texan]);
   });
 
-  it('degrades gracefully when only marine data fails: ranks the rest, warns about surfing', async () => {
-    const { service } = setup({
-      marine: () =>
-        Promise.reject(new UpstreamRequestError('open-meteo.marine', 'http_status', 503, true)),
-    });
-
-    const outcome = await service.rank({ city: 'Biarritz' });
-
-    if (outcome.kind !== 'ranked') throw new Error('expected ranked');
-    expect(outcome.warnings).toEqual([MARINE_UNAVAILABLE_WARNING]);
-    expect(outcome.activities.find((a) => a.activity === Activity.Surfing)?.applicable).toBe(false);
-    expect(outcome.activities[0]?.applicable).toBe(true);
-  });
-
-  it('fails the request when the main forecast fails (nothing meaningful to rank)', async () => {
-    const failure = new UpstreamRequestError('open-meteo.forecast', 'timeout', undefined, true);
+  it('propagates a forecast failure (the shared error policy turns it into a clean error)', async () => {
+    const failure = new Error('provider down');
     const { service } = setup({ forecast: () => Promise.reject(failure) });
 
     await expect(service.rank({ city: 'Biarritz' })).rejects.toBe(failure);
@@ -165,23 +134,5 @@ describe('sameNameAlternatives', () => {
     ];
 
     expect(sameNameAlternatives(chosen, candidates).map((c) => c.id)).toEqual([2, 4, 5, 6, 7]);
-  });
-});
-
-describe('joinByDate', () => {
-  it('pairs marine days to weather days by date, null where missing', () => {
-    const joined = joinByDate(
-      [aDay({ date: '2026-10-07' }), aDay({ date: '2026-10-08' })],
-      [aMarineDay({ date: '2026-10-08', waveHeightMaxM: 2 })],
-    );
-
-    expect(joined.map((d) => [d.weather.date, d.marine?.waveHeightMaxM ?? null])).toEqual([
-      ['2026-10-07', null],
-      ['2026-10-08', 2],
-    ]);
-  });
-
-  it('handles no marine data at all (inland)', () => {
-    expect(joinByDate([aDay()], null)[0]?.marine).toBeNull();
   });
 });
