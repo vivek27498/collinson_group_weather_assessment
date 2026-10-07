@@ -7,6 +7,8 @@ export interface RetryOptions {
   readonly baseDelayMs?: number;
   readonly maxDelayMs?: number;
   readonly logger?: Logger;
+  /** Observability hook (wired to a retries counter). */
+  readonly onRetry?: (upstream: string) => void;
   /** Injected for tests so they don't actually wait or depend on randomness. */
   readonly sleep?: (ms: number) => Promise<void>;
   readonly random?: () => number;
@@ -61,6 +63,7 @@ export class RetryingJsonClient implements JsonHttpClient {
           },
           'Upstream call failed, retrying',
         );
+        this.options.onRetry?.(context.upstream);
         await this.sleep(delayMs);
       }
     }

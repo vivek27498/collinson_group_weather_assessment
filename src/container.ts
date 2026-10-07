@@ -6,12 +6,14 @@ import { RankingService } from './application/ranking-service';
 import type { AppConfig } from './config/env';
 import { defaultScoringConfig } from './config/scoring';
 import { createScorers } from './domain/scoring/registry';
+import { InstrumentedJsonClient } from './infrastructure/http/instrumented-json-client';
 import { FetchJsonClient } from './infrastructure/http/json-http-client';
 import { RetryingJsonClient } from './infrastructure/http/retrying-json-client';
 import { OpenMeteoForecast } from './infrastructure/open-meteo/open-meteo-forecast';
 import { OpenMeteoGeocoder } from './infrastructure/open-meteo/open-meteo-geocoder';
 import { OpenMeteoMarine } from './infrastructure/open-meteo/open-meteo-marine';
 import type { Logger } from './observability/logger';
+import type { Metrics } from './observability/metrics';
 
 export interface Persistence {
   readonly forecasts: ForecastRepository;
@@ -35,11 +37,19 @@ export function createServices(
   logger: Logger,
   persistence: Persistence,
   clock: Clock = systemClock,
+  metrics?: Metrics,
 ): Services {
-  // Decorator: resilience (retries) wraps the plain client (timeout + error classification).
+  // Decorators, innermost first: fetch with timeout → time every attempt → retry transient failures.
   const http = new RetryingJsonClient(
-    new FetchJsonClient({ timeoutMs: config.upstream.timeoutMs }),
-    { maxRetries: config.upstream.maxRetries, logger },
+    new InstrumentedJsonClient(new FetchJsonClient({ timeoutMs: config.upstream.timeoutMs }), {
+      attempt: (upstream, outcome, seconds) =>
+        metrics?.upstreamRequestDuration.observe({ upstream, outcome }, seconds),
+    }),
+    {
+      maxRetries: config.upstream.maxRetries,
+      logger,
+      onRetry: (upstream) => metrics?.upstreamRetries.inc({ upstream }),
+    },
   );
 
   // Decorator again: a persistent cache in front of the Open-Meteo geocoder.
@@ -51,6 +61,7 @@ export function createServices(
       logger,
       ttlMs: config.cache.geocodeTtlMs,
       negativeTtlMs: config.cache.geocodeNegativeTtlMs,
+      onCacheOutcome: (outcome) => metrics?.geocodeCache.inc({ outcome }),
     },
   );
 
@@ -65,6 +76,8 @@ export function createServices(
       degradedFreshForMs: config.cache.forecastDegradedFreshMs,
       maxStaleMs: config.cache.forecastMaxStaleMs,
     },
+    onCacheOutcome: (outcome) => metrics?.forecastCache.inc({ outcome }),
+    onSharedFetch: () => metrics?.sharedFetches.inc(),
   });
 
   const rankingService = new RankingService({
@@ -72,6 +85,7 @@ export function createServices(
     forecasts: forecastService,
     scorers: createScorers(defaultScoringConfig),
     scoringConfig: defaultScoringConfig,
+    onOutcome: (outcome) => metrics?.rankingOutcomes.inc({ outcome }),
   });
 
   return { rankingService, forecastService };

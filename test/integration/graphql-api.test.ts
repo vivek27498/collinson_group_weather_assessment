@@ -10,6 +10,7 @@ import {
   type GraphQLHandler,
 } from '../../src/graphql/create-graphql-handler';
 import { createLogger } from '../../src/observability/logger';
+import { createMetrics } from '../../src/observability/metrics';
 import { loadFixture, type OpenMeteoFixture } from '../support/fixtures';
 import {
   FakeClock,
@@ -397,6 +398,49 @@ describe('GraphQL API: activityRankings', () => {
       expect(body.errors).toBeUndefined();
       expect(body.data.activityRankings.isStale).toBe(true);
       expect(body.data.activityRankings.activities).toHaveLength(4);
+    });
+  });
+
+  describe('observability', () => {
+    it('cache, outcome and upstream metrics reflect what happened', async () => {
+      const config = loadConfig({ DATABASE_URL: 'mysql://app:x@localhost:3307/weather' });
+      const logger = createLogger({ level: 'silent' });
+      const metrics = createMetrics();
+      const { rankingService } = createServices(
+        config,
+        logger,
+        { forecasts: new InMemoryForecastRepository(), geocodes: new InMemoryGeocodeCache() },
+        new FakeClock(),
+        metrics,
+      );
+      const handler = await createGraphQLHandler({
+        rankingService,
+        isProduction: false,
+        limits: config.graphql,
+        onError: (code) => {
+          metrics.graphqlErrors.inc({ code });
+        },
+      });
+      const observed = createApp({ logger, metrics, graphqlHandler: handler.handler });
+      try {
+        mockPlace('geocode-chamonix', 'forecast-chamonix', 'marine-inland-chamonix');
+        await rank(observed, { city: 'Chamonix' });
+        await rank(observed, { city: 'Chamonix' });
+        await rank(observed, { city: '<script>' });
+
+        const text = (await request(observed).get('/metrics')).text;
+        expect(text).toContain('weather_forecast_cache_total{outcome="miss"} 1');
+        expect(text).toContain('weather_forecast_cache_total{outcome="hit"} 1');
+        expect(text).toContain('weather_geocode_cache_total{outcome="miss"} 1');
+        expect(text).toContain('weather_geocode_cache_total{outcome="hit"} 1');
+        expect(text).toContain('weather_ranking_outcomes_total{outcome="ranked"} 2');
+        expect(text).toContain('weather_ranking_outcomes_total{outcome="invalidInput"} 1');
+        expect(text).toMatch(
+          /weather_upstream_request_duration_seconds_count\{upstream="open-meteo.forecast",outcome="success"\} 1/,
+        );
+      } finally {
+        await handler.stop();
+      }
     });
   });
 

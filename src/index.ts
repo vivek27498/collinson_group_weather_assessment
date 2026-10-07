@@ -6,6 +6,7 @@ import { createDatabase, pingDatabase } from './infrastructure/db/prisma-client'
 import { PrismaForecastRepository } from './infrastructure/db/prisma-forecast-repository';
 import { PrismaGeocodeCache } from './infrastructure/db/prisma-geocode-cache';
 import { createLogger } from './observability/logger';
+import { createMetrics } from './observability/metrics';
 import {
   createShutdownController,
   registerProcessHandlers,
@@ -19,15 +20,22 @@ async function main(): Promise<void> {
   const config = loadConfig();
   const logger = createLogger({ level: config.logLevel, pretty: config.env === 'development' });
 
+  const metrics = createMetrics();
   const db = createDatabase(config.databaseUrl);
-  const { rankingService, forecastService } = createServices(config, logger, {
-    forecasts: new PrismaForecastRepository(db),
-    geocodes: new PrismaGeocodeCache(db),
-  });
+  const { rankingService, forecastService } = createServices(
+    config,
+    logger,
+    { forecasts: new PrismaForecastRepository(db), geocodes: new PrismaGeocodeCache(db) },
+    undefined,
+    metrics,
+  );
   const graphql = await createGraphQLHandler({
     rankingService,
     isProduction: config.isProduction,
     limits: config.graphql,
+    onError: (code) => {
+      metrics.graphqlErrors.inc({ code });
+    },
   });
 
   // /readyz needs the controller, and the controller needs the server the app creates.
@@ -36,6 +44,7 @@ async function main(): Promise<void> {
     logger,
     isShuttingDown: () => controller.isShuttingDown(),
     readinessCheck: () => pingDatabase(db),
+    metrics,
     graphqlHandler: graphql.handler,
     rateLimit: config.rateLimit,
   });

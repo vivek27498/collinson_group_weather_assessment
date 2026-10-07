@@ -53,6 +53,8 @@ export interface RankingServiceDeps {
   readonly forecasts: ForecastSource;
   readonly scorers: readonly ActivityScorer[];
   readonly scoringConfig: ScoringConfig;
+  /** Observability hook (wired to an outcomes counter). */
+  readonly onOutcome?: (kind: RankingOutcome['kind']) => void;
 }
 
 /**
@@ -64,6 +66,12 @@ export class RankingService {
   constructor(private readonly deps: RankingServiceDeps) {}
 
   async rank(request: RankingRequest): Promise<RankingOutcome> {
+    const outcome = await this.resolve(request);
+    this.deps.onOutcome?.(outcome.kind);
+    return outcome;
+  }
+
+  private async resolve(request: RankingRequest): Promise<RankingOutcome> {
     const parsed = parseRankingInput(request);
     if (!parsed.ok) {
       return { kind: 'invalidInput', errors: parsed.errors };

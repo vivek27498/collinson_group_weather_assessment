@@ -142,3 +142,16 @@ Unpolished notes on how the work is going, newest last. Cuts and the reasons for
      fixed with a moduleNameMapper and `--experimental-vm-modules`.
 - Tests: 334 passing, including 12 against a real MySQL in Testcontainers (round-trips, no timezone
   shift, utf8mb4, injection payloads stored as data with the schema intact). Postman: 22 requests, 58 assertions.
+
+## 2026-10-07: Slice 4a, observability
+
+- Request-id correlation via AsyncLocalStorage + pino `mixin`: every log line written during a request
+  carries its id, including retry warnings and background refreshes. This closes the slice 1 follow-up
+  without passing loggers through constructors.
+- Prometheus `/metrics`: HTTP latency (bounded route labels), ranking outcomes, GraphQL error codes,
+  forecast/geocode cache hit/stale/miss, single-flight shared fetches, per-attempt upstream latency by
+  outcome, retries. Default process metrics (CPU, memory, event-loop lag).
+- Upstream instrumentation is a third decorator: Retrying(Instrumented(Fetch)), so each retry is timed.
+- Components expose tiny optional hooks (onCacheOutcome, onRetry, onOutcome) instead of importing
+  prom-client, so domain and application code stay metrics-agnostic.
+- 344 tests passing.
