@@ -8,10 +8,12 @@ import { formatGraphQLError } from './format-error';
 import { errorLoggingPlugin } from './plugins/error-logging';
 import { resolvers } from './resolvers';
 import { typeDefs } from './schema';
+import { createValidationRules } from './validation-rules';
 
 export interface GraphQLHandlerDeps {
   readonly rankingService: RankingService;
   readonly isProduction: boolean;
+  readonly limits: { readonly maxDepth: number; readonly maxRootFields: number };
 }
 
 export interface GraphQLHandler {
@@ -24,6 +26,10 @@ export async function createGraphQLHandler(deps: GraphQLHandlerDeps): Promise<Gr
     typeDefs,
     resolvers,
     formatError: formatGraphQLError,
+    validationRules: createValidationRules(deps.limits),
+    // Batched HTTP requests ([{query}, {query}, ...]) stay disabled (Apollo's default): they would
+    // bypass the per-request rate limit and root-field limit.
+    allowBatchedHttpRequests: false,
     // Never put stack traces in responses, in any environment. They go to logs instead.
     includeStacktraceInErrorResponses: false,
     // Introspection powers Postman's schema explorer in dev. In production it's off, so the

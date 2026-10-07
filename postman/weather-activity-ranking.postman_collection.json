@@ -101,7 +101,7 @@
             "body": {
               "mode": "graphql",
               "graphql": {
-                "query": "query Rank($input: RankingInput!) {\n  activityRankings(input: $input) {\n    __typename\n    ... on ActivityRankings {\n      location { name region country countryCode elevation timezone }\n      forecastFetchedAt\n      isStale\n      warnings\n      activities {\n        rank\n        activity\n        weeklyScore\n        weeklyRating\n        applicable\n        bestDay\n        days { date score rating reasons }\n      }\n    }\n    ... on LocationNotFound { message query }\n  }\n}",
+                "query": "query Rank($input: RankingInput!) {\n  activityRankings(input: $input) {\n    __typename\n    ... on ActivityRankings {\n      location { name region country countryCode elevation timezone }\n      alternatives { name region country countryCode }\n      forecastFetchedAt\n      isStale\n      warnings\n      activities {\n        rank\n        activity\n        weeklyScore\n        weeklyRating\n        applicable\n        bestDay\n        days { date score rating reasons }\n      }\n    }\n    ... on LocationNotFound { message query }\n    ... on InvalidInput { message fieldErrors { field message } }\n  }\n}",
                 "variables": "{\n  \"input\": {\n    \"city\": \"Chamonix\"\n  }\n}"
               }
             },
@@ -187,7 +187,7 @@
             "body": {
               "mode": "graphql",
               "graphql": {
-                "query": "query Rank($input: RankingInput!) {\n  activityRankings(input: $input) {\n    __typename\n    ... on ActivityRankings {\n      location { name region country countryCode elevation timezone }\n      forecastFetchedAt\n      isStale\n      warnings\n      activities {\n        rank\n        activity\n        weeklyScore\n        weeklyRating\n        applicable\n        bestDay\n        days { date score rating reasons }\n      }\n    }\n    ... on LocationNotFound { message query }\n  }\n}",
+                "query": "query Rank($input: RankingInput!) {\n  activityRankings(input: $input) {\n    __typename\n    ... on ActivityRankings {\n      location { name region country countryCode elevation timezone }\n      alternatives { name region country countryCode }\n      forecastFetchedAt\n      isStale\n      warnings\n      activities {\n        rank\n        activity\n        weeklyScore\n        weeklyRating\n        applicable\n        bestDay\n        days { date score rating reasons }\n      }\n    }\n    ... on LocationNotFound { message query }\n    ... on InvalidInput { message fieldErrors { field message } }\n  }\n}",
                 "variables": "{\n  \"input\": {\n    \"city\": \"Biarritz\"\n  }\n}"
               }
             },
@@ -231,7 +231,7 @@
             "body": {
               "mode": "graphql",
               "graphql": {
-                "query": "query Rank($input: RankingInput!) {\n  activityRankings(input: $input) {\n    __typename\n    ... on ActivityRankings {\n      location { name region country countryCode elevation timezone }\n      forecastFetchedAt\n      isStale\n      warnings\n      activities {\n        rank\n        activity\n        weeklyScore\n        weeklyRating\n        applicable\n        bestDay\n        days { date score rating reasons }\n      }\n    }\n    ... on LocationNotFound { message query }\n  }\n}",
+                "query": "query Rank($input: RankingInput!) {\n  activityRankings(input: $input) {\n    __typename\n    ... on ActivityRankings {\n      location { name region country countryCode elevation timezone }\n      alternatives { name region country countryCode }\n      forecastFetchedAt\n      isStale\n      warnings\n      activities {\n        rank\n        activity\n        weeklyScore\n        weeklyRating\n        applicable\n        bestDay\n        days { date score rating reasons }\n      }\n    }\n    ... on LocationNotFound { message query }\n    ... on InvalidInput { message fieldErrors { field message } }\n  }\n}",
                 "variables": "{\n  \"input\": {\n    \"city\": \"Madrid\"\n  }\n}"
               }
             },
@@ -281,7 +281,7 @@
             "body": {
               "mode": "graphql",
               "graphql": {
-                "query": "query Rank($input: RankingInput!) {\n  activityRankings(input: $input) {\n    __typename\n    ... on ActivityRankings {\n      location { name region country countryCode elevation timezone }\n      forecastFetchedAt\n      isStale\n      warnings\n      activities {\n        rank\n        activity\n        weeklyScore\n        weeklyRating\n        applicable\n        bestDay\n        days { date score rating reasons }\n      }\n    }\n    ... on LocationNotFound { message query }\n  }\n}",
+                "query": "query Rank($input: RankingInput!) {\n  activityRankings(input: $input) {\n    __typename\n    ... on ActivityRankings {\n      location { name region country countryCode elevation timezone }\n      alternatives { name region country countryCode }\n      forecastFetchedAt\n      isStale\n      warnings\n      activities {\n        rank\n        activity\n        weeklyScore\n        weeklyRating\n        applicable\n        bestDay\n        days { date score rating reasons }\n      }\n    }\n    ... on LocationNotFound { message query }\n    ... on InvalidInput { message fieldErrors { field message } }\n  }\n}",
                 "variables": "{\n  \"input\": {\n    \"city\": \"Bergen\",\n    \"countryCode\": \"NO\"\n  }\n}"
               }
             },
@@ -324,7 +324,7 @@
             "body": {
               "mode": "graphql",
               "graphql": {
-                "query": "query Rank($input: RankingInput!) {\n  activityRankings(input: $input) {\n    __typename\n    ... on ActivityRankings {\n      location { name region country countryCode elevation timezone }\n      forecastFetchedAt\n      isStale\n      warnings\n      activities {\n        rank\n        activity\n        weeklyScore\n        weeklyRating\n        applicable\n        bestDay\n        days { date score rating reasons }\n      }\n    }\n    ... on LocationNotFound { message query }\n  }\n}",
+                "query": "query Rank($input: RankingInput!) {\n  activityRankings(input: $input) {\n    __typename\n    ... on ActivityRankings {\n      location { name region country countryCode elevation timezone }\n      alternatives { name region country countryCode }\n      forecastFetchedAt\n      isStale\n      warnings\n      activities {\n        rank\n        activity\n        weeklyScore\n        weeklyRating\n        applicable\n        bestDay\n        days { date score rating reasons }\n      }\n    }\n    ... on LocationNotFound { message query }\n    ... on InvalidInput { message fieldErrors { field message } }\n  }\n}",
                 "variables": "{\n  \"input\": {\n    \"city\": \"Xyzzyqwv\"\n  }\n}"
               }
             },
@@ -338,7 +338,252 @@
       ]
     },
     {
-      "name": "5. Errors and protocol",
+      "name": "5. Ambiguous names (UC6)",
+      "item": [
+        {
+          "name": "Paris - which one?",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "const r = body.data && body.data.activityRankings;",
+                  "pm.test('HTTP 200 and no GraphQL errors', () => { pm.response.to.have.status(200); pm.expect(body.errors).to.be.undefined; });",
+                  "pm.test('Result is ActivityRankings', () => pm.expect(r.__typename).to.eql('ActivityRankings'));",
+                  "pm.test('All 4 activities ranked 1..4', () => pm.expect(r.activities.map(a => a.rank)).to.eql([1, 2, 3, 4]));",
+                  "pm.test('Applicable activities have 7 days and a best day', () => r.activities.filter(a => a.applicable).forEach(a => { pm.expect(a.days.length).to.eql(7); pm.expect(a.bestDay).to.match(/^\\d{4}-\\d{2}-\\d{2}$/); }));",
+                  "pm.test('Every day explains itself (reasons array)', () => r.activities.forEach(a => a.days.forEach(d => pm.expect(d.reasons).to.be.an('array'))));",
+                  "console.log(r.activities.map(a => a.rank + '. ' + a.activity + ': ' + a.weeklyScore + ' (' + a.weeklyRating + ') best ' + a.bestDay).join('\\n'));",
+                  "pm.test('Resolved to Paris, France', () => pm.expect(r.location.countryCode).to.eql('FR'));",
+                  "pm.test('Lists same-name alternatives, e.g. Paris, Texas', () => { pm.expect(r.alternatives.length).to.be.within(1, 5); pm.expect(r.alternatives.some(a => a.countryCode === 'US')).to.eql(true); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "description": "Resolves to the best match (Paris, France) and lists other places called Paris, so the client can spot ambiguity.",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "query Rank($input: RankingInput!) {\n  activityRankings(input: $input) {\n    __typename\n    ... on ActivityRankings {\n      location { name region country countryCode elevation timezone }\n      alternatives { name region country countryCode }\n      forecastFetchedAt\n      isStale\n      warnings\n      activities {\n        rank\n        activity\n        weeklyScore\n        weeklyRating\n        applicable\n        bestDay\n        days { date score rating reasons }\n      }\n    }\n    ... on LocationNotFound { message query }\n    ... on InvalidInput { message fieldErrors { field message } }\n  }\n}",
+                "variables": "{\n  \"input\": {\n    \"city\": \"Paris\"\n  }\n}"
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/graphql",
+              "host": ["{{baseUrl}}"],
+              "path": ["graphql"]
+            }
+          }
+        },
+        {
+          "name": "Paris, US (countryCode picks it)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "const r = body.data && body.data.activityRankings;",
+                  "pm.test('HTTP 200 and no GraphQL errors', () => { pm.response.to.have.status(200); pm.expect(body.errors).to.be.undefined; });",
+                  "pm.test('Result is ActivityRankings', () => pm.expect(r.__typename).to.eql('ActivityRankings'));",
+                  "pm.test('All 4 activities ranked 1..4', () => pm.expect(r.activities.map(a => a.rank)).to.eql([1, 2, 3, 4]));",
+                  "pm.test('Applicable activities have 7 days and a best day', () => r.activities.filter(a => a.applicable).forEach(a => { pm.expect(a.days.length).to.eql(7); pm.expect(a.bestDay).to.match(/^\\d{4}-\\d{2}-\\d{2}$/); }));",
+                  "pm.test('Every day explains itself (reasons array)', () => r.activities.forEach(a => a.days.forEach(d => pm.expect(d.reasons).to.be.an('array'))));",
+                  "console.log(r.activities.map(a => a.rank + '. ' + a.activity + ': ' + a.weeklyScore + ' (' + a.weeklyRating + ') best ' + a.bestDay).join('\\n'));",
+                  "pm.test('Resolved to a Paris in the US', () => pm.expect(r.location.countryCode).to.eql('US'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "description": "Same name, disambiguated with countryCode (case-insensitive).",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "query Rank($input: RankingInput!) {\n  activityRankings(input: $input) {\n    __typename\n    ... on ActivityRankings {\n      location { name region country countryCode elevation timezone }\n      alternatives { name region country countryCode }\n      forecastFetchedAt\n      isStale\n      warnings\n      activities {\n        rank\n        activity\n        weeklyScore\n        weeklyRating\n        applicable\n        bestDay\n        days { date score rating reasons }\n      }\n    }\n    ... on LocationNotFound { message query }\n    ... on InvalidInput { message fieldErrors { field message } }\n  }\n}",
+                "variables": "{\n  \"input\": {\n    \"city\": \"Paris\",\n    \"countryCode\": \"us\"\n  }\n}"
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/graphql",
+              "host": ["{{baseUrl}}"],
+              "path": ["graphql"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "6. Validation and security",
+      "item": [
+        {
+          "name": "SQL injection payload in city",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const r = pm.response.json().data.activityRankings;",
+                  "pm.test('InvalidInput on the city field', () => { pm.expect(r.__typename).to.eql('InvalidInput'); pm.expect(r.fieldErrors[0].field).to.eql('city'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "description": "Allow-list validation rejects it before anything is looked up or stored.",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "query Rank($input: RankingInput!) {\n  activityRankings(input: $input) {\n    __typename\n    ... on ActivityRankings {\n      location { name region country countryCode elevation timezone }\n      alternatives { name region country countryCode }\n      forecastFetchedAt\n      isStale\n      warnings\n      activities {\n        rank\n        activity\n        weeklyScore\n        weeklyRating\n        applicable\n        bestDay\n        days { date score rating reasons }\n      }\n    }\n    ... on LocationNotFound { message query }\n    ... on InvalidInput { message fieldErrors { field message } }\n  }\n}",
+                "variables": "{\n  \"input\": {\n    \"city\": \"'; DROP TABLE locations;--\"\n  }\n}"
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/graphql",
+              "host": ["{{baseUrl}}"],
+              "path": ["graphql"]
+            }
+          }
+        },
+        {
+          "name": "XSS payload in city",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('InvalidInput', () => pm.expect(pm.response.json().data.activityRankings.__typename).to.eql('InvalidInput'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "description": "Same allow-list: markup is never accepted.",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "query Rank($input: RankingInput!) {\n  activityRankings(input: $input) {\n    __typename\n    ... on ActivityRankings {\n      location { name region country countryCode elevation timezone }\n      alternatives { name region country countryCode }\n      forecastFetchedAt\n      isStale\n      warnings\n      activities {\n        rank\n        activity\n        weeklyScore\n        weeklyRating\n        applicable\n        bestDay\n        days { date score rating reasons }\n      }\n    }\n    ... on LocationNotFound { message query }\n    ... on InvalidInput { message fieldErrors { field message } }\n  }\n}",
+                "variables": "{\n  \"input\": {\n    \"city\": \"<script>alert(1)</script>\"\n  }\n}"
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/graphql",
+              "host": ["{{baseUrl}}"],
+              "path": ["graphql"]
+            }
+          }
+        },
+        {
+          "name": "Invalid countryCode",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const r = pm.response.json().data.activityRankings;",
+                  "pm.test('InvalidInput on countryCode', () => { pm.expect(r.__typename).to.eql('InvalidInput'); pm.expect(r.fieldErrors[0].field).to.eql('countryCode'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "description": "Must be a 2-letter ISO code.",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "query Rank($input: RankingInput!) {\n  activityRankings(input: $input) {\n    __typename\n    ... on ActivityRankings {\n      location { name region country countryCode elevation timezone }\n      alternatives { name region country countryCode }\n      forecastFetchedAt\n      isStale\n      warnings\n      activities {\n        rank\n        activity\n        weeklyScore\n        weeklyRating\n        applicable\n        bestDay\n        days { date score rating reasons }\n      }\n    }\n    ... on LocationNotFound { message query }\n    ... on InvalidInput { message fieldErrors { field message } }\n  }\n}",
+                "variables": "{\n  \"input\": {\n    \"city\": \"Paris\",\n    \"countryCode\": \"FRA\"\n  }\n}"
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/graphql",
+              "host": ["{{baseUrl}}"],
+              "path": ["graphql"]
+            }
+          }
+        },
+        {
+          "name": "Alias amplification (4 root fields)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400 Too many root fields', () => { pm.response.to.have.status(400); pm.expect(pm.response.json().errors[0].message).to.match(/Too many root fields/); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "description": "One request asking for many places via aliases would multiply upstream calls. Rejected during validation (max 3).",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "{ a: activityRankings(input: {city: \"Paris\"}) { __typename } b: activityRankings(input: {city: \"Rome\"}) { __typename } c: activityRankings(input: {city: \"Oslo\"}) { __typename } d: activityRankings(input: {city: \"Bern\"}) { __typename } }",
+                "variables": "{}"
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/graphql",
+              "host": ["{{baseUrl}}"],
+              "path": ["graphql"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "7. Errors and protocol",
       "item": [
         {
           "name": "Invalid query (unknown field)",

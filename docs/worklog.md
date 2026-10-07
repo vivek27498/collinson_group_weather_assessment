@@ -101,3 +101,20 @@ Unpolished notes on how the work is going, newest last. Cuts and the reasons for
   - Retry warnings use the app logger, so they lack the request id. Fix in slice 4 with AsyncLocalStorage.
   - Indoor often rates EXCELLENT in sunny weeks (see PM question #13).
 - Tests: 235 passing (unit + integration with nock), with no live network access in tests.
+
+## 2026-10-07: Slice 2, ambiguity, validation, abuse limits (UC6)
+
+- Validation moved into the use case (`parseRankingInput`) so any future transport gets the same rules.
+  It's an allow-list (letters in any script, marks, spaces, `'’.-`). Input is normalised (NFC, trim,
+  collapse spaces) so equivalent queries share a cache key. One message per field.
+- `InvalidInput` and `alternatives` (same-name places, max 5) added to the schema. "Paris" → France,
+  with Paris, Texas etc. listed; `countryCode` picks one.
+- Abuse limits, all checked before any upstream call:
+  - Per-IP rate limit on /graphql with RateLimit-* headers and a 429 envelope.
+  - Custom `maxRootFields` rule against alias amplification (`a: activityRankings b: ... x500`).
+  - Depth limit.
+  - Batching off.
+- **Finding:** the depth-limit integration test passed straight through. graphql-depth-limit ignores
+  introspection fields, and our schema has no recursive types, so real queries can't exceed depth ~4.
+  The depth limit is defence-in-depth, tested at unit level with a low limit. Introspection itself is off in production.
+- Tests: 292 passing. Postman: 19 requests / 53 assertions via newman.

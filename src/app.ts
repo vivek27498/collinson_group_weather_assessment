@@ -1,8 +1,9 @@
 import express, { type Express, type RequestHandler } from 'express';
+import { rateLimit } from 'express-rate-limit';
 import helmet from 'helmet';
 import { pinoHttp } from 'pino-http';
 import type { Logger } from './observability/logger';
-import { ServiceUnavailableError } from './shared/errors/app-error';
+import { RateLimitedError, ServiceUnavailableError } from './shared/errors/app-error';
 import { errorHandler, notFoundHandler } from './shared/http/error-handler';
 import { genReqId } from './shared/http/request-id';
 import { sendSuccess } from './shared/http/respond';
@@ -13,6 +14,8 @@ export interface AppDependencies {
   readonly isShuttingDown?: () => boolean;
   /** The GraphQL endpoint (Apollo). Optional so infrastructure tests can build the bare app. */
   readonly graphqlHandler?: RequestHandler;
+  /** Per-IP limit on /graphql. Health probes are never limited. */
+  readonly rateLimit?: { readonly windowMs: number; readonly max: number };
 }
 
 /**
@@ -27,6 +30,7 @@ export function createApp({
   logger,
   isShuttingDown = () => false,
   graphqlHandler,
+  rateLimit: rateLimitOptions = { windowMs: 60_000, max: 60 },
 }: AppDependencies): Express {
   const app = express();
 
@@ -58,7 +62,18 @@ export function createApp({
   });
 
   if (graphqlHandler) {
-    app.use('/graphql', graphqlHandler);
+    const limiter = rateLimit({
+      windowMs: rateLimitOptions.windowMs,
+      limit: rateLimitOptions.max,
+      // RateLimit-* headers (IETF draft) tell well-behaved clients how much budget is left.
+      standardHeaders: 'draft-8',
+      legacyHeaders: false,
+      // Route the rejection through the shared error policy, so a 429 uses the same envelope.
+      handler: (_req, _res, next) => {
+        next(new RateLimitedError());
+      },
+    });
+    app.use('/graphql', limiter, graphqlHandler);
   }
 
   app.use(notFoundHandler);

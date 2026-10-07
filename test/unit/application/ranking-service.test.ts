@@ -7,6 +7,7 @@ import {
   joinByDate,
   MARINE_UNAVAILABLE_WARNING,
   RankingService,
+  sameNameAlternatives,
 } from '../../../src/application/ranking-service';
 import { defaultScoringConfig } from '../../../src/config/scoring';
 import { createScorers } from '../../../src/domain/scoring/registry';
@@ -70,7 +71,7 @@ describe('RankingService', () => {
   it('geocodes, fetches weather + marine for the top match, and ranks all activities', async () => {
     const { service, geocoder, forecast, marine } = setup({});
 
-    const outcome = await service.rank({ name: 'Biarritz', countryCode: 'FR' });
+    const outcome = await service.rank({ city: 'Biarritz', countryCode: 'FR' });
 
     expect(geocoder.search).toHaveBeenCalledWith({ name: 'Biarritz', countryCode: 'FR' });
     expect(forecast.getDailyForecast).toHaveBeenCalledWith({ latitude: 43.48, longitude: -1.55 });
@@ -92,12 +93,41 @@ describe('RankingService', () => {
   it('returns locationNotFound (a value, not an exception) and skips the weather calls', async () => {
     const { service, forecast, marine } = setup({ locations: [] });
 
-    await expect(service.rank({ name: 'Atlantis' })).resolves.toEqual({
+    await expect(service.rank({ city: 'Atlantis' })).resolves.toEqual({
       kind: 'locationNotFound',
       query: { name: 'Atlantis' },
     });
     expect(forecast.getDailyForecast).not.toHaveBeenCalled();
     expect(marine.getDailyMarine).not.toHaveBeenCalled();
+  });
+
+  it('rejects invalid input without calling any provider', async () => {
+    const { service, geocoder, forecast } = setup({});
+
+    const outcome = await service.rank({ city: "'; DROP TABLE locations;--" });
+
+    expect(outcome).toMatchObject({ kind: 'invalidInput', errors: [{ path: 'city' }] });
+    expect(geocoder.search).not.toHaveBeenCalled();
+    expect(forecast.getDailyForecast).not.toHaveBeenCalled();
+  });
+
+  it('passes the normalised query to the geocoder', async () => {
+    const { service, geocoder } = setup({});
+
+    await service.rank({ city: '  Biarritz  ', countryCode: 'fr' });
+
+    expect(geocoder.search).toHaveBeenCalledWith({ name: 'Biarritz', countryCode: 'FR' });
+  });
+
+  it('returns same-name alternatives so ambiguous names are visible', async () => {
+    const parisTexas = { ...biarritz, id: 2, name: 'Biarritz', countryCode: 'US', region: 'Texas' };
+    const { service } = setup({ locations: [biarritz, parisTexas] });
+
+    const outcome = await service.rank({ city: 'Biarritz' });
+
+    if (outcome.kind !== 'ranked') throw new Error('expected ranked');
+    expect(outcome.location.countryCode).toBe('FR');
+    expect(outcome.alternatives).toEqual([parisTexas]);
   });
 
   it('degrades gracefully when only marine data fails: ranks the rest, warns about surfing', async () => {
@@ -106,7 +136,7 @@ describe('RankingService', () => {
         Promise.reject(new UpstreamRequestError('open-meteo.marine', 'http_status', 503, true)),
     });
 
-    const outcome = await service.rank({ name: 'Biarritz' });
+    const outcome = await service.rank({ city: 'Biarritz' });
 
     if (outcome.kind !== 'ranked') throw new Error('expected ranked');
     expect(outcome.warnings).toEqual([MARINE_UNAVAILABLE_WARNING]);
@@ -118,7 +148,23 @@ describe('RankingService', () => {
     const failure = new UpstreamRequestError('open-meteo.forecast', 'timeout', undefined, true);
     const { service } = setup({ forecast: () => Promise.reject(failure) });
 
-    await expect(service.rank({ name: 'Biarritz' })).rejects.toBe(failure);
+    await expect(service.rank({ city: 'Biarritz' })).rejects.toBe(failure);
+  });
+});
+
+describe('sameNameAlternatives', () => {
+  const place = (id: number, name: string) => ({ ...biarritz, id, name });
+
+  it('keeps only other places with the same name (case-insensitive), max 5', () => {
+    const chosen = place(1, 'Paris');
+    const candidates = [
+      chosen,
+      place(2, 'PARIS'),
+      place(3, 'Parisot'), // fuzzy match, not an ambiguity
+      ...[4, 5, 6, 7, 8].map((id) => place(id, 'Paris')),
+    ];
+
+    expect(sameNameAlternatives(chosen, candidates).map((c) => c.id)).toEqual([2, 4, 5, 6, 7]);
   });
 });
 

@@ -23,11 +23,16 @@ export const typeDefs = /* GraphQL */ `
   Expected outcomes are union members, not errors: clients switch on __typename.
   Errors (the "errors" array) are reserved for real failures such as the weather provider being down.
   """
-  union RankingResult = ActivityRankings | LocationNotFound
+  union RankingResult = ActivityRankings | LocationNotFound | InvalidInput
 
   type ActivityRankings {
     "The place we resolved the query to. Check it: names can be ambiguous."
     location: Location!
+    """
+    Other places with the same name (up to 5). If the one you meant is here, query again with
+    its countryCode.
+    """
+    alternatives: [Location!]!
     "When the forecast data was fetched from the provider (ISO 8601)."
     forecastFetchedAt: String!
     "True if served from cache after its freshness window because the provider was unavailable."
@@ -77,6 +82,18 @@ export const typeDefs = /* GraphQL */ `
   type LocationNotFound {
     message: String!
     query: String!
+  }
+
+  "The input isn't a plausible place name or country code. Nothing was looked up."
+  type InvalidInput {
+    message: String!
+    fieldErrors: [FieldError!]!
+  }
+
+  type FieldError {
+    "Input field, e.g. city or countryCode."
+    field: String!
+    message: String!
   }
 
   enum Activity {

@@ -23,6 +23,8 @@ describe('loadConfig', () => {
         marineUrl: 'https://marine-api.open-meteo.com/v1/marine',
       },
       upstream: { timeoutMs: 3000, maxRetries: 2 },
+      rateLimit: { windowMs: 60_000, max: 60 },
+      graphql: { maxDepth: 6, maxRootFields: 3 },
     });
     expect(Object.isFrozen(config)).toBe(true);
   });
