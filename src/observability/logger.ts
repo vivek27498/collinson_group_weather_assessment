@@ -1,4 +1,5 @@
-import pino, { type Logger, type LoggerOptions } from 'pino';
+import pino, { type DestinationStream, type Logger, type LoggerOptions } from 'pino';
+import { currentRequestContext } from './request-context';
 
 export type { Logger };
 
@@ -16,12 +17,24 @@ export const REDACT_PATHS = [
   '*.DATABASE_URL',
 ];
 
-export function createLogger(options: { level: LoggerOptions['level']; pretty?: boolean }): Logger {
-  return pino({
+export function createLogger(options: {
+  level: LoggerOptions['level'];
+  pretty?: boolean;
+  /** Where to write (tests capture output here). Defaults to stdout. */
+  destination?: DestinationStream;
+}): Logger {
+  const settings: LoggerOptions = {
     level: options.level ?? 'info',
     base: { service: 'weather-activity-ranking' },
     timestamp: pino.stdTimeFunctions.isoTime,
     redact: { paths: REDACT_PATHS, censor: '[REDACTED]' },
-    ...(options.pretty ? { transport: { target: 'pino-pretty' } } : {}),
-  });
+    // Every line logged while handling a request carries its id, even from components that were
+    // built at startup with this root logger (see request-context.ts).
+    mixin: () => {
+      const context = currentRequestContext();
+      return context ? { requestId: context.requestId } : {};
+    },
+    ...(options.pretty && !options.destination ? { transport: { target: 'pino-pretty' } } : {}),
+  };
+  return options.destination ? pino(settings, options.destination) : pino(settings);
 }

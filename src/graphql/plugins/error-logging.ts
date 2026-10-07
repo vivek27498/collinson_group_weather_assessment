@@ -8,7 +8,9 @@ import type { GraphQLContext } from '../context';
  * chooses. formatError only shapes the *response*. Logging lives here because plugins can see
  * the request context (and therefore the request-scoped logger).
  */
-export function errorLoggingPlugin(): ApolloServerPlugin<GraphQLContext> {
+export function errorLoggingPlugin(
+  onError?: (code: string) => void,
+): ApolloServerPlugin<GraphQLContext> {
   return {
     requestDidStart() {
       return Promise.resolve({
@@ -16,6 +18,9 @@ export function errorLoggingPlugin(): ApolloServerPlugin<GraphQLContext> {
           for (const error of errors) {
             const original = error.originalError ?? error;
             if (original instanceof GraphQLError) {
+              onError?.(
+                typeof error.extensions.code === 'string' ? error.extensions.code : 'GRAPHQL_ERROR',
+              );
               // Syntax/validation errors: the client sent a bad query.
               contextValue.log.warn(
                 { operationName, code: error.extensions.code, message: error.message },
@@ -24,6 +29,7 @@ export function errorLoggingPlugin(): ApolloServerPlugin<GraphQLContext> {
               continue;
             }
             const mapped = mapError(original);
+            onError?.(mapped.code);
             const fields = { operationName, code: mapped.code, path: error.path };
             if (mapped.logLevel === 'error') {
               contextValue.log.error({ ...fields, err: original }, 'GraphQL operation failed');
