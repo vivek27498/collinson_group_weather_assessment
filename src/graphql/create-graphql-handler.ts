@@ -30,6 +30,10 @@ export async function createGraphQLHandler(deps: GraphQLHandlerDeps): Promise<Gr
     // Batched HTTP requests ([{query}, {query}, ...]) stay disabled (Apollo's default): they would
     // bypass the per-request rate limit and root-field limit.
     allowBatchedHttpRequests: false,
+    // Our graceful-shutdown controller owns process signals. Apollo's default handlers stop the
+    // server and then re-send the signal to the process, which our controller sees as a second
+    // Ctrl+C and force-exits, skipping the DB disconnect. Found by running `docker stop`.
+    stopOnTerminationSignals: false,
     // Never put stack traces in responses, in any environment. They go to logs instead.
     includeStacktraceInErrorResponses: false,
     // Introspection powers Postman's schema explorer in dev. In production it's off, so the

@@ -1,0 +1,87 @@
+// Persistence model. See docs/decisions/ADR-001 (MySQL + Prisma) and ADR-003 (caching).
+// We store normalised *weather*, never scores: scores are computed on read, so changing
+// scoring rules never needs a backfill.
+
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "cjs"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+/// A place resolved by geocoding, keyed by Open-Meteo's (GeoNames) id, which is stable.
+model Location {
+  id          Int      @id
+  name        String   @db.VarChar(200)
+  region      String?  @db.VarChar(200)
+  country     String?  @db.VarChar(100)
+  countryCode String?  @map("country_code") @db.Char(2)
+  latitude    Float
+  longitude   Float
+  elevationM  Float?   @map("elevation_m")
+  timezone    String?  @db.VarChar(64)
+  population  Int?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("locations")
+}
+
+/// A cached geocoding answer for a normalised query ("paris|US").
+/// An empty list is a cached "not found" (negative caching), with a shorter TTL.
+model GeocodeQuery {
+  queryKey    String   @id @map("query_key") @db.VarChar(120)
+  /// Candidate location ids, best match first.
+  locationIds Json     @map("location_ids")
+  fetchedAt   DateTime @map("fetched_at") @db.DateTime(3)
+
+  @@map("geocode_queries")
+}
+
+/// The latest forecast for one ~11 km grid cell (lat/lon rounded to 0.1°).
+/// One row per cell, replaced on refresh: history isn't a requirement, so nothing to prune.
+model ForecastSnapshot {
+  gridKey      String          @id @map("grid_key") @db.VarChar(32)
+  latitude     Float
+  longitude    Float
+  fetchedAt    DateTime        @map("fetched_at") @db.DateTime(3)
+  marineStatus MarineStatus    @map("marine_status")
+  days         DailyForecast[]
+
+  @@map("forecast_snapshots")
+}
+
+/// AVAILABLE: sea data stored. NONE: inland (no sea). UNAVAILABLE: the marine API failed at
+/// fetch time, so the snapshot is "degraded" and refreshed sooner.
+enum MarineStatus {
+  AVAILABLE
+  NONE
+  UNAVAILABLE
+}
+
+/// One local calendar day of weather (+ sea state) for a grid cell.
+model DailyForecast {
+  gridKey                        String           @map("grid_key") @db.VarChar(32)
+  date                           DateTime         @db.Date
+  weatherCode                    Int              @map("weather_code")
+  temperatureMaxC                Float            @map("temperature_max_c")
+  temperatureMinC                Float            @map("temperature_min_c")
+  precipitationSumMm             Float            @map("precipitation_sum_mm")
+  precipitationProbabilityMaxPct Float?           @map("precipitation_probability_max_pct")
+  snowfallSumCm                  Float            @map("snowfall_sum_cm")
+  snowDepthMaxM                  Float?           @map("snow_depth_max_m")
+  windSpeedMaxKmh                Float            @map("wind_speed_max_kmh")
+  windGustsMaxKmh                Float            @map("wind_gusts_max_kmh")
+  sunshineDurationS              Float?           @map("sunshine_duration_s")
+  uvIndexMax                     Float?           @map("uv_index_max")
+  waveHeightMaxM                 Float?           @map("wave_height_max_m")
+  wavePeriodMaxS                 Float?           @map("wave_period_max_s")
+  swellWaveHeightMaxM            Float?           @map("swell_wave_height_max_m")
+  snapshot                       ForecastSnapshot @relation(fields: [gridKey], references: [gridKey], onDelete: Cascade)
+
+  @@id([gridKey, date])
+  @@map("daily_forecasts")
+}

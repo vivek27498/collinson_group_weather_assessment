@@ -4,13 +4,18 @@ import nock from 'nock';
 import request from 'supertest';
 import { createApp } from '../../src/app';
 import { loadConfig } from '../../src/config/env';
-import { createRankingService } from '../../src/container';
+import { createServices } from '../../src/container';
 import {
   createGraphQLHandler,
   type GraphQLHandler,
 } from '../../src/graphql/create-graphql-handler';
 import { createLogger } from '../../src/observability/logger';
 import { loadFixture, type OpenMeteoFixture } from '../support/fixtures';
+import {
+  FakeClock,
+  InMemoryForecastRepository,
+  InMemoryGeocodeCache,
+} from '../support/in-memory-repositories';
 
 /**
  * End-to-end through the real wiring (Express → Apollo → RankingService → adapters → HTTP
@@ -122,10 +127,15 @@ function mockPlace(
     .reply(...reply(marine));
 }
 
-async function buildApp(
-  isProduction = false,
-  rateLimitMax = 1000,
-): Promise<{ app: Express; graphql: GraphQLHandler }> {
+interface TestApp {
+  app: Express;
+  graphql: GraphQLHandler;
+  clock: FakeClock;
+  forecasts: InMemoryForecastRepository;
+  drain: () => Promise<void>;
+}
+
+async function buildApp(isProduction = false, rateLimitMax = 1000): Promise<TestApp> {
   const config = loadConfig({
     NODE_ENV: isProduction ? 'production' : 'test',
     DATABASE_URL: 'mysql://app:x@localhost:3307/weather',
@@ -133,8 +143,18 @@ async function buildApp(
     UPSTREAM_TIMEOUT_MS: '1000',
   });
   const logger = createLogger({ level: 'silent' });
+  const clock = new FakeClock();
+  const forecasts = new InMemoryForecastRepository();
+  // The real object graph; only persistence is in-memory (the Prisma adapters have their own
+  // Testcontainers tests) and the clock is controllable.
+  const { rankingService, forecastService } = createServices(
+    config,
+    logger,
+    { forecasts, geocodes: new InMemoryGeocodeCache() },
+    clock,
+  );
   const graphql = await createGraphQLHandler({
-    rankingService: createRankingService(config, logger),
+    rankingService,
     isProduction,
     limits: config.graphql,
   });
@@ -145,6 +165,9 @@ async function buildApp(
       rateLimit: { windowMs: 60_000, max: rateLimitMax },
     }),
     graphql,
+    clock,
+    forecasts,
+    drain: () => forecastService.drain(),
   };
 }
 
@@ -155,17 +178,20 @@ describe('GraphQL API: activityRankings', () => {
   let app: Express;
   let graphql: GraphQLHandler;
 
-  beforeAll(async () => {
+  beforeAll(() => {
     nock.disableNetConnect();
     nock.enableNetConnect('127.0.0.1');
+  });
+  // A fresh app (and empty cache) per test, so cached answers never leak between tests.
+  beforeEach(async () => {
     ({ app, graphql } = await buildApp());
   });
-  afterEach(() => {
+  afterEach(async () => {
     nock.cleanAll();
-  });
-  afterAll(async () => {
-    nock.enableNetConnect();
     await graphql.stop();
+  });
+  afterAll(() => {
+    nock.enableNetConnect();
   });
 
   describe('use cases 1–5: plan the week, pick the day, explain, not-applicable', () => {
@@ -308,6 +334,69 @@ describe('GraphQL API: activityRankings', () => {
       expect(result.fieldErrors).toEqual([
         { field: 'countryCode', message: expect.any(String) as unknown },
       ]);
+    });
+  });
+
+  describe('use case 8: persistence, caching and stale data', () => {
+    let cached: TestApp;
+    beforeEach(async () => {
+      cached = await buildApp();
+    });
+    afterEach(async () => {
+      await cached.graphql.stop();
+    });
+
+    it('serves the second request from the cache: no second provider call', async () => {
+      mockPlace('geocode-chamonix', 'forecast-chamonix', 'marine-inland-chamonix'); // one reply each
+
+      const first = await rank(cached.app, { city: 'Chamonix' });
+      const second = await rank(cached.app, { city: 'chamonix' }); // case-insensitive cache key
+
+      expect(nock.pendingMocks()).toEqual([]);
+      const a = (first.body as { data: { activityRankings: Ranked } }).data.activityRankings;
+      const b = (second.body as { data: { activityRankings: Ranked } }).data.activityRankings;
+      expect(b.forecastFetchedAt).toBe(a.forecastFetchedAt);
+      expect(b.isStale).toBe(false);
+      expect(cached.forecasts.saves).toBe(1);
+    });
+
+    it('after 3h serves stale data (isStale) immediately and refreshes in the background', async () => {
+      mockPlace('geocode-chamonix', 'forecast-chamonix', 'marine-inland-chamonix');
+      await rank(cached.app, { city: 'Chamonix' });
+
+      cached.clock.advance(3 * 3_600_000);
+      nock(FORECAST)
+        .get('/v1/forecast')
+        .query(true)
+        .reply(...reply('forecast-chamonix'));
+      nock(MARINE)
+        .get('/v1/marine')
+        .query(true)
+        .reply(...reply('marine-inland-chamonix'));
+      const stale = await rank(cached.app, { city: 'Chamonix' });
+      await cached.drain();
+
+      expect(
+        (stale.body as { data: { activityRankings: Ranked } }).data.activityRankings.isStale,
+      ).toBe(true);
+      expect(nock.pendingMocks()).toEqual([]); // the background refresh happened
+      expect(cached.forecasts.saves).toBe(2);
+    });
+
+    it('provider outage while data is stale: still answers with isStale=true (no error)', async () => {
+      mockPlace('geocode-chamonix', 'forecast-chamonix', 'marine-inland-chamonix');
+      await rank(cached.app, { city: 'Chamonix' });
+
+      cached.clock.advance(6 * 3_600_000);
+      nock(FORECAST).get('/v1/forecast').query(true).times(2).reply(503);
+      nock(MARINE).get('/v1/marine').query(true).times(2).reply(503);
+      const res = await rank(cached.app, { city: 'Chamonix' });
+      await cached.drain();
+
+      const body = res.body as { data: { activityRankings: Ranked }; errors?: unknown };
+      expect(body.errors).toBeUndefined();
+      expect(body.data.activityRankings.isStale).toBe(true);
+      expect(body.data.activityRankings.activities).toHaveLength(4);
     });
   });
 

@@ -69,6 +69,21 @@ and `warnings` contains _"Sea-state data is temporarily unavailable, so surfing 
 **Rate limiting:** start with `$env:RATE_LIMIT_MAX=3; npm run dev` and send any request 4 times. The 4th
 returns HTTP 429 with `error.code = "RATE_LIMITED"`, and the response headers include `RateLimit-Policy` / `RateLimit`.
 
-## 5. Coming in later slices
+**Stale-while-revalidate:** start with `$env:FORECAST_FRESH_MINUTES=1; npm run dev`, query a city,
+wait just over a minute, and query again. The response comes back instantly with `isStale: true`,
+and the log shows a background refresh. Query once more and `isStale` is false with a newer `forecastFetchedAt`.
 
-- **Slice 3:** persistence and caching. The second call for a city is served from MySQL, and stale data is served during an outage (`isStale: true`).
+**Outage with cached data:** query a city, restart with `FORECAST_FRESH_MINUTES=1` and a dead
+`OPEN_METEO_FORECAST_URL` (see above), wait a minute, and query again. You still get rankings,
+with `isStale: true`, instead of an error.
+
+**Inspect the cache:**
+`docker compose exec mysql mysql -uapp -papp_dev_password weather -e "SELECT grid_key, marine_status, fetched_at FROM forecast_snapshots"`
+
+## 5. Running the whole stack in Docker
+
+```powershell
+docker compose up -d --build     # MySQL -> migrate (as migrator) -> app (as app user)
+```
+
+The service is then on http://localhost:4000, and the same Postman collection works against it.

@@ -22,9 +22,16 @@ describe('loadConfig', () => {
         forecastUrl: 'https://api.open-meteo.com/v1/forecast',
         marineUrl: 'https://marine-api.open-meteo.com/v1/marine',
       },
-      upstream: { timeoutMs: 3000, maxRetries: 2 },
+      upstream: { timeoutMs: 6000, maxRetries: 1 },
       rateLimit: { windowMs: 60_000, max: 60 },
       graphql: { maxDepth: 6, maxRootFields: 3 },
+      cache: {
+        forecastFreshMs: 3 * 3_600_000,
+        forecastDegradedFreshMs: 15 * 60_000,
+        forecastMaxStaleMs: 24 * 3_600_000,
+        geocodeTtlMs: 30 * 86_400_000,
+        geocodeNegativeTtlMs: 24 * 3_600_000,
+      },
     });
     expect(Object.isFrozen(config)).toBe(true);
   });
