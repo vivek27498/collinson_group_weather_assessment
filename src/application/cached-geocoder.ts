@@ -2,6 +2,7 @@ import type { GeoLocation } from '../domain/types';
 import type { Logger } from '../observability/logger';
 import type { Clock } from './clock';
 import type { GeocodeCache, Geocoder, LocationQuery } from './ports';
+import { SingleFlight } from './single-flight';
 
 export interface CachedGeocoderOptions {
   readonly clock: Clock;
@@ -24,6 +25,10 @@ export function geocodeQueryKey(query: LocationQuery): string {
  * straight from the provider.
  */
 export class CachedGeocoder implements Geocoder {
+  // Added after the k6 stampede test: 200 concurrent requests for a new city made 200 geocoding
+  // calls and 200 competing upserts of the same rows (p95 6.3 s). Now they share one lookup.
+  private readonly flights = new SingleFlight<GeoLocation[]>();
+
   constructor(
     private readonly inner: Geocoder,
     private readonly cache: GeocodeCache,
@@ -32,6 +37,11 @@ export class CachedGeocoder implements Geocoder {
 
   async search(query: LocationQuery): Promise<GeoLocation[]> {
     const key = geocodeQueryKey(query);
+    // Copy, so one caller can't mutate the array other waiters receive.
+    return [...(await this.flights.run(key, () => this.lookup(key, query)))];
+  }
+
+  private async lookup(key: string, query: LocationQuery): Promise<GeoLocation[]> {
     const now = this.options.clock.now();
 
     const cached = await this.cache.get(key).catch((err: unknown) => {

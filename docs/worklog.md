@@ -155,3 +155,21 @@ Unpolished notes on how the work is going, newest last. Cuts and the reasons for
 - Components expose tiny optional hooks (onCacheOutcome, onRetry, onOutcome) instead of importing
   prom-client, so domain and application code stay metrics-agnostic.
 - 344 tests passing.
+
+## 2026-10-07: Slice 4b, load testing and README
+
+- Mock upstream (recorded payloads, 300 ms latency, per-endpoint call counters) + 3 k6 scenarios
+  (warm / stampede / mixed). Results in docs/load-testing.md.
+- **The stampede test found a real gap:** geocoding wasn't single-flighted (200 calls for 200 concurrent
+  requests, plus 200 competing upserts, p95 6.3 s). Fixed: 1 call per endpoint, p95 1.3 s.
+- The warm path is bounded by DB round-trips (3 queries per request, ~5 ms each through Docker
+  Desktop). Pool 10 → 20 took warm throughput from 69 to 200 rps. In the mixed run, cold misses slow
+  warm hits through the shared pool. The next step is an in-process L1 cache (documented, not built: to
+  be discussed in the use-case review).
+- A mock artefact (32-bit ids overflowing INT) showed the best-effort cache degrading correctly: every
+  request still succeeded, and the logs and metrics showed the problem straight away.
+- Housekeeping lesson: background `npm run dev` processes were "stopped" by killing only the listener,
+  so `tsx watch` restarted them. Five stale dev servers were found later, one serving on :4000 against
+  the real API. Now I kill the whole process tree. A hung Jest process from earlier was probably also
+  what locked `node_modules` during the failed `npm ci`.
+- README written: what, how to run, assumptions, links to the process docs.
