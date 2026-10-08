@@ -183,3 +183,10 @@ Unpolished notes on how the work is going, newest last. Cuts and the reasons for
 - Verified live: Innsbruck, 1st call live (2.76 s, forecast fetch 1084 ms), 2nd call from cache (24 ms).
 - Note for production: these are per-request info lines; at high traffic, run with LOG_LEVEL=warn and
   rely on the cache metrics instead.
+
+## 2026-10-09: Test title fix
+
+- While writing study notes I noticed several table-driven test titles printed "→ NaN" (e.g.
+  "no snow on the ground → NaN"). Jest's printf placeholders are positional: `%i` consumed the
+  second column (the input object), not the expected score. The titles now use the case name only.
+  The tests themselves were always correct; only the labels were wrong.

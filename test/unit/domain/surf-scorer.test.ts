@@ -71,7 +71,7 @@ describe('SurfScorer', () => {
       60,
       'Thunderstorms: lightning risk in the water (-40)',
     ],
-  ])('%s → %i', (_case, marine, weather, expectedScore, expectedReason) => {
+  ])('%s', (_case, marine, weather, expectedScore, expectedReason) => {
     const result = score(marine, weather);
 
     expect(result.score).toBe(expectedScore);

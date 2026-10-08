@@ -32,7 +32,7 @@ describe('OutdoorSightseeingScorer', () => {
     ['fog', { weatherCode: 48 }, 90, 'Fog limits views (-10)'],
     ['snowing', { weatherCode: 73 }, 85, 'Snowfall (-15)'],
     ['very high UV', { uvIndexMax: 9 }, 95, 'Very high UV (9) (-5)'],
-  ])('%s → %i', (_case, overrides, expectedScore, expectedReason) => {
+  ])('%s', (_case, overrides, expectedScore, expectedReason) => {
     const result = outdoorScore(overrides);
 
     expect(result.score).toBe(expectedScore);
