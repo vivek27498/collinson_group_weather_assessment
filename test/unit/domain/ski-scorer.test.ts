@@ -34,7 +34,7 @@ describe('SkiScorer', () => {
     ['drizzle counts as rain', { weatherCode: 53 }, 75, 'Rain on the slopes (-25)'],
     ['thunderstorm', { weatherCode: 95 }, 70, 'Thunderstorms (-30)'],
     ['fog', { weatherCode: 45 }, 90, 'Fog / poor visibility (-10)'],
-  ])('%s → %i', (_case, overrides, expectedScore, expectedReason) => {
+  ])('%s', (_case, overrides, expectedScore, expectedReason) => {
     const result = score(overrides);
 
     expect(result.score).toBe(expectedScore);
@@ -57,7 +57,7 @@ describe('SkiScorer', () => {
     ['low elevation', { elevationM: 200 }, 85],
     ['elevation exactly at threshold', { elevationM: 500 }, 100],
     ['unknown elevation is not penalised', { elevationM: null }, 100],
-  ])('%s → %i', (_case, location, expected) => {
+  ])('%s', (_case, location, expected) => {
     expect(score({}, location).score).toBe(expected);
   });
 
