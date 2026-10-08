@@ -13,6 +13,7 @@ import type {
 import type { DailyWeather, MarineDay } from '../../../src/domain/types';
 import { createLogger } from '../../../src/observability/logger';
 import { aDay, aMarineDay } from '../../support/builders';
+import { captureLogs } from '../../support/log-capture';
 import { FakeClock, InMemoryForecastRepository } from '../../support/in-memory-repositories';
 
 const MIN = 60_000;
@@ -218,6 +219,40 @@ describe('ForecastService', () => {
       await expect(service.getForecast(biarritz)).resolves.toMatchObject({ isStale: false });
       expect(repository.snapshots.size).toBe(0);
     });
+  });
+});
+
+describe('ForecastService logs where the data came from', () => {
+  it('logs source=open-meteo on a miss, source=cache on a hit, source=cache-stale when stale', async () => {
+    const { logger, lines } = captureLogs('info');
+    const clock = new FakeClock();
+    const service = new ForecastService({
+      repository: new InMemoryForecastRepository(),
+      weather: { getDailyForecast: () => Promise.resolve([aDay({ date: '2026-10-07' })]) },
+      marine: { getDailyMarine: () => Promise.resolve(null) },
+      clock,
+      logger,
+      policy,
+    });
+
+    await service.getForecast(biarritz); // miss → live fetch
+    clock.advance(10 * MIN);
+    await service.getForecast(biarritz); // fresh → cache
+    clock.advance(3 * HOUR);
+    await service.getForecast(biarritz); // stale → cache + background refresh
+    await service.drain();
+
+    expect(lines().map((l) => [l.source, l.msg])).toEqual([
+      ['open-meteo', 'Forecast not in cache; fetching live from Open-Meteo'],
+      ['open-meteo', 'Forecast fetched live from Open-Meteo and stored in cache'],
+      ['cache', 'Forecast served from cache (MySQL)'],
+      [
+        'cache-stale',
+        'Forecast served STALE from cache; refreshing from Open-Meteo in the background',
+      ],
+      ['open-meteo', 'Forecast fetched live from Open-Meteo and stored in cache'],
+    ]);
+    expect(lines()[2]).toMatchObject({ gridKey: '43.5,-1.6', ageSeconds: 600 });
   });
 });
 

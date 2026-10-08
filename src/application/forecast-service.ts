@@ -87,18 +87,34 @@ export class ForecastService implements ForecastSource {
 
     if (cached) {
       const age = this.deps.clock.now().getTime() - cached.fetchedAt.getTime();
+      const ageSeconds = Math.round(age / 1000);
       if (age < this.freshFor(cached)) {
         this.deps.onCacheOutcome?.('hit');
+        this.deps.logger.info(
+          { source: 'cache', gridKey: cell.key, ageSeconds },
+          'Forecast served from cache (MySQL)',
+        );
         return toForecast(cached, false);
       }
       if (age < this.deps.policy.maxStaleMs) {
         this.deps.onCacheOutcome?.('stale');
+        this.deps.logger.info(
+          { source: 'cache-stale', gridKey: cell.key, ageSeconds },
+          'Forecast served STALE from cache; refreshing from Open-Meteo in the background',
+        );
         this.refreshInBackground(cell);
         return toForecast(cached, true);
       }
     }
 
-    this.deps.onCacheOutcome?.(cached ? 'expired' : 'miss');
+    const reason = cached ? 'expired' : 'miss';
+    this.deps.onCacheOutcome?.(reason);
+    this.deps.logger.info(
+      { source: 'open-meteo', gridKey: cell.key, reason },
+      reason === 'miss'
+        ? 'Forecast not in cache; fetching live from Open-Meteo'
+        : 'Cached forecast too old to serve; fetching live from Open-Meteo',
+    );
     return toForecast(await this.refresh(cell), false);
   }
 
@@ -126,6 +142,7 @@ export class ForecastService implements ForecastSource {
   }
 
   private async fetchAndStore(cell: GridCell): Promise<ForecastSnapshot> {
+    const started = Date.now();
     const [weather, marine] = await Promise.all([
       this.deps.weather.getDailyForecast(cell),
       this.fetchMarine(cell),
@@ -145,6 +162,16 @@ export class ForecastService implements ForecastSource {
       // Still serve what we fetched; we'll simply fetch again next time.
       this.deps.logger.error({ err, gridKey: cell.key }, 'Failed to persist forecast snapshot');
     }
+    this.deps.logger.info(
+      {
+        source: 'open-meteo',
+        gridKey: cell.key,
+        durationMs: Date.now() - started,
+        days: snapshot.days.length,
+        marineStatus: snapshot.marineStatus,
+      },
+      'Forecast fetched live from Open-Meteo and stored in cache',
+    );
     return snapshot;
   }
 

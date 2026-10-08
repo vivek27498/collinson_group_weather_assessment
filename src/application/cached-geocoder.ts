@@ -52,11 +52,20 @@ export class CachedGeocoder implements Geocoder {
       const ttl = cached.locations.length > 0 ? this.options.ttlMs : this.options.negativeTtlMs;
       if (now.getTime() - cached.fetchedAt.getTime() < ttl) {
         this.options.onCacheOutcome?.('hit');
+        this.options.logger.info(
+          { source: 'cache', query: key, candidates: cached.locations.length },
+          'Location served from cache (MySQL)',
+        );
         return [...cached.locations];
       }
     }
 
     this.options.onCacheOutcome?.('miss');
+    // `key` is the validated, normalised query (allow-listed characters only), so safe to log.
+    this.options.logger.info(
+      { source: 'open-meteo', query: key },
+      'Location not in cache; looking it up live on Open-Meteo geocoding',
+    );
     const locations = await this.inner.search(query);
     await this.cache.put(key, locations, now).catch((err: unknown) => {
       this.options.logger.error({ err }, 'Geocode cache write failed');

@@ -173,3 +173,13 @@ Unpolished notes on how the work is going, newest last. Cuts and the reasons for
   the real API. Now I kill the whole process tree. A hung Jest process from earlier was probably also
   what locked `node_modules` during the failed `npm ci`.
 - README written: what, how to run, assumptions, links to the process docs.
+
+## 2026-10-08: Data-source logging (my request)
+
+- I wanted to see from the service logs alone whether data came from the cache or live from
+  Open-Meteo. Added one `info` line per decision with a `source` field (`cache`, `cache-stale`,
+  `open-meteo`), plus `ageSeconds` for cache hits and `durationMs` for live fetches. Every line also
+  carries the requestId (via the AsyncLocalStorage mixin), so one request can be followed end to end.
+- Verified live: Innsbruck, 1st call live (2.76 s, forecast fetch 1084 ms), 2nd call from cache (24 ms).
+- Note for production: these are per-request info lines; at high traffic, run with LOG_LEVEL=warn and
+  rely on the cache metrics instead.
