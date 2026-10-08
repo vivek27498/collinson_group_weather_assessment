@@ -190,3 +190,12 @@ Unpolished notes on how the work is going, newest last. Cuts and the reasons for
   "no snow on the ground → NaN"). Jest's printf placeholders are positional: `%i` consumed the
   second column (the input object), not the expected score. The titles now use the case name only.
   The tests themselves were always correct; only the labels were wrong.
+
+## 2026-10-09: CI coverage gate was failing (found while writing study notes)
+
+- The coverage gate (85%) ran on the unit suite only. Since slice 1, the resolvers, Apollo setup,
+  composition root and Prisma adapters are exercised by the _integration_ tests, so the unit-only
+  figure had dropped to 83% and the CI step was failing. I hadn't been watching the Actions tab.
+- Fix: `npm run test:cov` now runs unit + integration together with coverage (99.6% lines, 90%
+  branches), and CI runs it once in place of the separate unit-coverage and integration steps.
+- Lesson: a quality gate nobody looks at isn't a gate. Check the CI result after every push.
