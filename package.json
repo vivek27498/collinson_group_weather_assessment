@@ -19,7 +19,7 @@
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
     "test:unit": "node --experimental-vm-modules node_modules/jest/bin/jest.js --selectProjects unit",
     "test:int": "node --experimental-vm-modules node_modules/jest/bin/jest.js --selectProjects integration --passWithNoTests",
-    "test:cov": "node --experimental-vm-modules node_modules/jest/bin/jest.js --selectProjects unit --coverage",
+    "test:cov": "node --experimental-vm-modules node_modules/jest/bin/jest.js --coverage",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate deploy",
     "db:migrate:dev": "prisma migrate dev",

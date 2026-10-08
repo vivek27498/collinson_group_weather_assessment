@@ -22,9 +22,10 @@ jobs:
       - run: npm run format:check
       - run: npm run lint
       - run: npm run typecheck
+      # Unit + integration together (Docker is available on ubuntu runners for Testcontainers).
+      # Coverage is measured across both: wiring, resolvers and the Prisma adapters are exercised
+      # by the integration tests, so a unit-only gate under-reports (it read 83% vs 99.6% overall).
       - run: npm run test:cov
-      # Docker is available on ubuntu runners, so Testcontainers-based tests run here too.
-      - run: npm run test:int
       - run: npm run build
       - name: Audit production dependencies
         run: npm audit --omit=dev --audit-level=high
