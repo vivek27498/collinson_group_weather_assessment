@@ -3,6 +3,7 @@ import type { Geocoder } from '../../../src/application/ports';
 import type { GeoLocation } from '../../../src/domain/types';
 import { createLogger } from '../../../src/observability/logger';
 import { FakeClock, InMemoryGeocodeCache } from '../../support/in-memory-repositories';
+import { captureLogs } from '../../support/log-capture';
 
 const HOUR = 3_600_000;
 const DAY = 24 * HOUR;
@@ -97,6 +98,25 @@ describe('CachedGeocoder', () => {
     expect(put).toHaveBeenCalledTimes(1);
     expect(results.every((r) => r[0]?.id === paris.id)).toBe(true);
     expect(results[0]).not.toBe(results[1]); // each caller gets its own array
+  });
+
+  it('logs whether the location came from the cache or a live lookup', async () => {
+    const { logger, lines } = captureLogs('info');
+    const inner: Geocoder = { search: () => Promise.resolve([paris]) };
+    const geocoder = new CachedGeocoder(inner, new InMemoryGeocodeCache(), {
+      clock: new FakeClock(),
+      logger,
+      ttlMs: 30 * DAY,
+      negativeTtlMs: DAY,
+    });
+
+    await geocoder.search({ name: 'Paris' });
+    await geocoder.search({ name: 'Paris' });
+
+    expect(lines().map((l) => [l.source, l.query])).toEqual([
+      ['open-meteo', 'paris|'],
+      ['cache', 'paris|'],
+    ]);
   });
 
   it('still answers when the cache is unavailable (best-effort cache)', async () => {
