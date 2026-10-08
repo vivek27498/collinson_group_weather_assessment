@@ -12,8 +12,8 @@ from [Open-Meteo](https://open-meteo.com) and is persisted in MySQL, not fetched
 ## Try it
 
 ```graphql
-query {
-  activityRankings(input: { city: "Chamonix" }) {
+query Rank($input: RankingInput!) {
+  activityRankings(input: $input) {
     ... on ActivityRankings {
       location {
         name
@@ -45,6 +45,14 @@ query {
   }
 }
 ```
+
+with variables (the standard way to pass inputs: the query text stays fixed, only the values change):
+
+```json
+{ "input": { "city": "Chamonix" } }
+```
+
+As curl: [docs/manual-testing.md#6-curl-cheat-sheet](docs/manual-testing.md#6-curl-cheat-sheet).
 
 ```jsonc
 // abridged

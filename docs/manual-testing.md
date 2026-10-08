@@ -87,3 +87,90 @@ docker compose up -d --build     # MySQL -> migrate (as migrator) -> app (as app
 ```
 
 The service is then on http://localhost:4000, and the same Postman collection works against it.
+
+## 6. curl cheat sheet
+
+All requests use the standard GraphQL-over-HTTP body `{ "query", "variables" }`. The query text stays fixed and
+only the `variables` change, so no quotes need escaping inside the query. Run them in Git Bash with
+the server on `localhost:4000`. Append `| python -m json.tool` to pretty-print.
+
+**Health**
+
+```bash
+curl -s localhost:4000/healthz
+curl -s localhost:4000/readyz
+```
+
+**UC1-3: rank the week, best day, reasons**
+
+```bash
+curl -s localhost:4000/graphql -H 'Content-Type: application/json' --data '{
+  "query": "query Rank($input: RankingInput!) { activityRankings(input: $input) { __typename ... on ActivityRankings { location { name country } forecastFetchedAt isStale warnings activities { rank activity weeklyScore weeklyRating bestDay days { date score rating reasons } } } } }",
+  "variables": { "input": { "city": "Chamonix" } }
+}'
+```
+
+**UC4: surfing scored on the coast vs not applicable inland** (same query; change only the variables)
+
+```bash
+curl -s localhost:4000/graphql -H 'Content-Type: application/json' --data '{
+  "query": "query Rank($input: RankingInput!) { activityRankings(input: $input) { ... on ActivityRankings { location { name country } activities { rank activity weeklyScore weeklyRating applicable } } } }",
+  "variables": { "input": { "city": "Biarritz" } }
+}'
+# then: "variables": { "input": { "city": "Madrid" } }
+```
+
+**UC5: rainy city, so indoor should rank high**
+
+```bash
+curl -s localhost:4000/graphql -H 'Content-Type: application/json' --data '{
+  "query": "query Rank($input: RankingInput!) { activityRankings(input: $input) { ... on ActivityRankings { activities { rank activity weeklyScore weeklyRating } } } }",
+  "variables": { "input": { "city": "Bergen", "countryCode": "NO" } }
+}'
+```
+
+**UC6: ambiguous names (which Paris?)**
+
+```bash
+curl -s localhost:4000/graphql -H 'Content-Type: application/json' --data '{
+  "query": "query Rank($input: RankingInput!) { activityRankings(input: $input) { ... on ActivityRankings { location { name region country countryCode } alternatives { name region country countryCode } } } }",
+  "variables": { "input": { "city": "Paris" } }
+}'
+# then pick another one: "variables": { "input": { "city": "Paris", "countryCode": "US" } }
+```
+
+**UC7: unknown place, returned as data, not an error**
+
+```bash
+curl -s localhost:4000/graphql -H 'Content-Type: application/json' --data '{
+  "query": "query Rank($input: RankingInput!) { activityRankings(input: $input) { __typename ... on LocationNotFound { message query } } }",
+  "variables": { "input": { "city": "Xyzzyqwv" } }
+}'
+```
+
+**Validation and injection: rejected before anything is looked up**
+
+```bash
+curl -s localhost:4000/graphql -H 'Content-Type: application/json' --data '{
+  "query": "query Rank($input: RankingInput!) { activityRankings(input: $input) { __typename ... on InvalidInput { message fieldErrors { field message } } } }",
+  "variables": { "input": { "city": "Paris'"'"' OR 1=1", "countryCode": "FRA" } }
+}'
+```
+
+**UC8: caching. Watch the time and the `source` field in the server log**
+
+```bash
+for i in 1 2; do
+  curl -s -o /dev/null -w "call $i: %{time_total}s\n" localhost:4000/graphql \
+    -H 'Content-Type: application/json' -H "x-request-id: cache-demo-$i" --data '{
+    "query": "query Rank($input: RankingInput!) { activityRankings(input: $input) { __typename } }",
+    "variables": { "input": { "city": "Vienna" } }
+  }'
+done
+```
+
+**Metrics**
+
+```bash
+curl -s localhost:4000/metrics | grep -E "^weather_(forecast|geocode)_cache_total|^weather_ranking_outcomes_total"
+```
