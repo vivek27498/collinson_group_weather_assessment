@@ -1,11 +1,9 @@
 import express, { type Express, type RequestHandler } from 'express';
-import { rateLimit } from 'express-rate-limit';
 import helmet from 'helmet';
 import { pinoHttp } from 'pino-http';
 import type { Logger } from './observability/logger';
-import { httpMetricsMiddleware, metricsEndpoint, type Metrics } from './observability/metrics';
 import { requestContextMiddleware } from './observability/request-context';
-import { RateLimitedError, ServiceUnavailableError } from './shared/errors/app-error';
+import { ServiceUnavailableError } from './shared/errors/app-error';
 import { errorHandler, notFoundHandler } from './shared/http/error-handler';
 import { genReqId } from './shared/http/request-id';
 import { sendSuccess } from './shared/http/respond';
@@ -18,10 +16,6 @@ export interface AppDependencies {
   readonly graphqlHandler?: RequestHandler;
   /** Dependency check for /readyz (e.g. a DB ping). Throwing means "not ready". */
   readonly readinessCheck?: () => Promise<void>;
-  /** Prometheus metrics; exposes GET /metrics when provided. */
-  readonly metrics?: Metrics;
-  /** Per-IP limit on /graphql. Health probes are never limited. */
-  readonly rateLimit?: { readonly windowMs: number; readonly max: number };
 }
 
 /**
@@ -37,8 +31,6 @@ export function createApp({
   isShuttingDown = () => false,
   graphqlHandler,
   readinessCheck = () => Promise.resolve(),
-  metrics,
-  rateLimit: rateLimitOptions = { windowMs: 60_000, max: 60 },
 }: AppDependencies): Express {
   const app = express();
 
@@ -51,12 +43,11 @@ export function createApp({
       genReqId,
       // Health probes run every few seconds; logging each one is noise.
       autoLogging: {
-        ignore: (req) => req.url === '/healthz' || req.url === '/readyz' || req.url === '/metrics',
+        ignore: (req) => req.url === '/healthz' || req.url === '/readyz',
       },
     }),
   );
   app.use(requestContextMiddleware);
-  if (metrics) app.use(httpMetricsMiddleware(metrics));
   app.use(helmet());
   app.use(express.json({ limit: '10kb' }));
 
@@ -82,23 +73,8 @@ export function createApp({
     sendSuccess(req, res, { status: 'ready' });
   });
 
-  // Scraped by Prometheus. In production expose it only on the internal network
-  // (or a separate port); it isn't sensitive, but it isn't public either.
-  if (metrics) app.get('/metrics', metricsEndpoint(metrics));
-
   if (graphqlHandler) {
-    const limiter = rateLimit({
-      windowMs: rateLimitOptions.windowMs,
-      limit: rateLimitOptions.max,
-      // RateLimit-* headers (IETF draft) tell well-behaved clients how much budget is left.
-      standardHeaders: 'draft-8',
-      legacyHeaders: false,
-      // Route the rejection through the shared error policy, so a 429 uses the same envelope.
-      handler: (_req, _res, next) => {
-        next(new RateLimitedError());
-      },
-    });
-    app.use('/graphql', limiter, graphqlHandler);
+    app.use('/graphql', graphqlHandler);
   }
 
   app.use(notFoundHandler);

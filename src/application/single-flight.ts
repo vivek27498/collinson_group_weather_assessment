@@ -10,12 +10,9 @@
 export class SingleFlight<T> {
   private readonly inFlight = new Map<string, Promise<T>>();
 
-  constructor(private readonly onShared?: (key: string) => void) {}
-
   run(key: string, work: () => Promise<T>): Promise<T> {
     const existing = this.inFlight.get(key);
     if (existing) {
-      this.onShared?.(key);
       return existing;
     }
     const promise = work().finally(() => {

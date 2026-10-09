@@ -14,7 +14,6 @@ export interface GraphQLHandlerDeps {
   readonly rankingService: RankingService;
   readonly isProduction: boolean;
   readonly limits: { readonly maxDepth: number; readonly maxRootFields: number };
-  readonly onError?: (code: string) => void;
 }
 
 export interface GraphQLHandler {
@@ -44,7 +43,7 @@ export async function createGraphQLHandler(deps: GraphQLHandlerDeps): Promise<Gr
     plugins: [
       // No browser playground: it needs a relaxed CSP. Postman is our client.
       ApolloServerPluginLandingPageDisabled(),
-      errorLoggingPlugin(deps.onError),
+      errorLoggingPlugin(),
     ],
   });
   await apollo.start();

@@ -11,7 +11,6 @@ export interface CachedGeocoderOptions {
   readonly ttlMs: number;
   /** "No such place" is cached too, briefly, so repeated typos don't each cost an upstream call. */
   readonly negativeTtlMs: number;
-  readonly onCacheOutcome?: (outcome: 'hit' | 'miss') => void;
 }
 
 /** One cache key per normalised query: "paris|US", "paris|". */
@@ -51,7 +50,6 @@ export class CachedGeocoder implements Geocoder {
     if (cached) {
       const ttl = cached.locations.length > 0 ? this.options.ttlMs : this.options.negativeTtlMs;
       if (now.getTime() - cached.fetchedAt.getTime() < ttl) {
-        this.options.onCacheOutcome?.('hit');
         this.options.logger.info(
           { source: 'cache', query: key, candidates: cached.locations.length },
           'Location served from cache (MySQL)',
@@ -60,7 +58,6 @@ export class CachedGeocoder implements Geocoder {
       }
     }
 
-    this.options.onCacheOutcome?.('miss');
     // `key` is the validated, normalised query (allow-listed characters only), so safe to log.
     this.options.logger.info(
       { source: 'open-meteo', query: key },

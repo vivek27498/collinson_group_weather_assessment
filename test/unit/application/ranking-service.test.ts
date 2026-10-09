@@ -121,28 +121,6 @@ describe('RankingService', () => {
   });
 });
 
-describe('RankingService outcome hook', () => {
-  it('reports every outcome kind (wired to a metrics counter)', async () => {
-    const outcomes: string[] = [];
-    const geocoder: Geocoder = {
-      search: (q) => Promise.resolve(q.name === 'Nowhere' ? [] : [biarritz]),
-    };
-    const service = new RankingService({
-      geocoder,
-      forecasts: { getForecast: () => Promise.resolve(aForecast()) },
-      scorers: createScorers(defaultScoringConfig),
-      scoringConfig: defaultScoringConfig,
-      onOutcome: (kind) => outcomes.push(kind),
-    });
-
-    await service.rank({ city: 'Biarritz' });
-    await service.rank({ city: 'Nowhere' });
-    await service.rank({ city: '<bad>' });
-
-    expect(outcomes).toEqual(['ranked', 'locationNotFound', 'invalidInput']);
-  });
-});
-
 describe('sameNameAlternatives', () => {
   const place = (id: number, name: string) => ({ ...biarritz, id, name });
 

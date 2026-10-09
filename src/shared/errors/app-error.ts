@@ -12,7 +12,6 @@ export const ErrorKind = {
   Validation: 'VALIDATION',
   NotFound: 'NOT_FOUND',
   PayloadTooLarge: 'PAYLOAD_TOO_LARGE',
-  RateLimited: 'RATE_LIMITED',
   UpstreamUnavailable: 'UPSTREAM_UNAVAILABLE',
   ServiceUnavailable: 'SERVICE_UNAVAILABLE',
   Internal: 'INTERNAL',
@@ -54,13 +53,6 @@ export class NotFoundError extends AppError {
   readonly kind = ErrorKind.NotFound;
   constructor(message = 'Resource not found', options?: AppErrorOptions) {
     super(message, 'NOT_FOUND', options);
-  }
-}
-
-export class RateLimitedError extends AppError {
-  readonly kind = ErrorKind.RateLimited;
-  constructor(message = 'Too many requests, please slow down', options?: AppErrorOptions) {
-    super(message, 'RATE_LIMITED', options);
   }
 }
 

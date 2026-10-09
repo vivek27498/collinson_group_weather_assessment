@@ -24,15 +24,13 @@ function setup(results: GeoLocation[] = [paris]) {
   const inner: jest.Mocked<Geocoder> = { search: jest.fn().mockResolvedValue(results) };
   const cache = new InMemoryGeocodeCache();
   const clock = new FakeClock();
-  const outcomes: string[] = [];
   const geocoder = new CachedGeocoder(inner, cache, {
     clock,
     logger: createLogger({ level: 'silent' }),
     ttlMs: 30 * DAY,
     negativeTtlMs: DAY,
-    onCacheOutcome: (o) => outcomes.push(o),
   });
-  return { geocoder, inner, cache, clock, outcomes };
+  return { geocoder, inner, cache, clock };
 }
 
 describe('geocodeQueryKey', () => {
@@ -44,14 +42,13 @@ describe('geocodeQueryKey', () => {
 
 describe('CachedGeocoder', () => {
   it('caches results: the second identical query never reaches the provider', async () => {
-    const { geocoder, inner, outcomes } = setup();
+    const { geocoder, inner } = setup();
 
     await geocoder.search({ name: 'Paris' });
     const second = await geocoder.search({ name: 'paris' });
 
     expect(second).toEqual([paris]);
     expect(inner.search).toHaveBeenCalledTimes(1);
-    expect(outcomes).toEqual(['miss', 'hit']);
   });
 
   it('keeps different country filters apart', async () => {

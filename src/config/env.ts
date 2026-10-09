@@ -23,9 +23,7 @@ const envSchema = z.object({
   UPSTREAM_TIMEOUT_MS: z.coerce.number().int().min(100).max(30_000).default(6000),
   UPSTREAM_MAX_RETRIES: z.coerce.number().int().min(0).max(5).default(1),
 
-  // Abuse protection for /graphql (per client IP, per instance; see ADR-004).
-  RATE_LIMIT_WINDOW_MS: z.coerce.number().int().min(1000).default(60_000),
-  RATE_LIMIT_MAX: z.coerce.number().int().min(1).default(60),
+  // Query-shape limits for /graphql (see ADR-004).
   GRAPHQL_MAX_DEPTH: z.coerce.number().int().min(2).max(20).default(6),
   GRAPHQL_MAX_ROOT_FIELDS: z.coerce.number().int().min(1).max(10).default(3),
 
@@ -51,7 +49,6 @@ export interface AppConfig {
     readonly marineUrl: string;
   };
   readonly upstream: { readonly timeoutMs: number; readonly maxRetries: number };
-  readonly rateLimit: { readonly windowMs: number; readonly max: number };
   readonly graphql: { readonly maxDepth: number; readonly maxRootFields: number };
   readonly cache: {
     readonly forecastFreshMs: number;
@@ -93,7 +90,6 @@ export function loadConfig(source: Record<string, string | undefined> = process.
       marineUrl: env.OPEN_METEO_MARINE_URL,
     },
     upstream: { timeoutMs: env.UPSTREAM_TIMEOUT_MS, maxRetries: env.UPSTREAM_MAX_RETRIES },
-    rateLimit: { windowMs: env.RATE_LIMIT_WINDOW_MS, max: env.RATE_LIMIT_MAX },
     graphql: { maxDepth: env.GRAPHQL_MAX_DEPTH, maxRootFields: env.GRAPHQL_MAX_ROOT_FIELDS },
     cache: {
       forecastFreshMs: env.FORECAST_FRESH_MINUTES * MINUTE,

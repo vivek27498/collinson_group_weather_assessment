@@ -33,9 +33,6 @@ export interface ForecastCachePolicy {
   readonly maxStaleMs: number;
 }
 
-/** hit: fresh from cache. stale: served stale + background refresh. miss/expired: fetched now. */
-export type CacheOutcome = 'hit' | 'stale' | 'miss' | 'expired';
-
 export interface ForecastServiceDeps {
   readonly repository: ForecastRepository;
   readonly weather: WeatherForecastProvider;
@@ -43,9 +40,6 @@ export interface ForecastServiceDeps {
   readonly clock: Clock;
   readonly logger: Logger;
   readonly policy: ForecastCachePolicy;
-  /** Observability hooks (wired to metrics in the composition root). */
-  readonly onCacheOutcome?: (outcome: CacheOutcome) => void;
-  readonly onSharedFetch?: () => void;
 }
 
 export const MARINE_UNAVAILABLE_WARNING =
@@ -75,11 +69,9 @@ type GridCell = ReturnType<typeof gridCell>;
  * optimisation, not a dependency: if it's down, we read through to the provider.
  */
 export class ForecastService implements ForecastSource {
-  private readonly flights: SingleFlight<ForecastSnapshot>;
+  private readonly flights = new SingleFlight<ForecastSnapshot>();
 
-  constructor(private readonly deps: ForecastServiceDeps) {
-    this.flights = new SingleFlight(() => deps.onSharedFetch?.());
-  }
+  constructor(private readonly deps: ForecastServiceDeps) {}
 
   async getForecast(at: Coordinates): Promise<Forecast> {
     const cell = gridCell(at);
@@ -89,7 +81,6 @@ export class ForecastService implements ForecastSource {
       const age = this.deps.clock.now().getTime() - cached.fetchedAt.getTime();
       const ageSeconds = Math.round(age / 1000);
       if (age < this.freshFor(cached)) {
-        this.deps.onCacheOutcome?.('hit');
         this.deps.logger.info(
           { source: 'cache', gridKey: cell.key, ageSeconds },
           'Forecast served from cache (MySQL)',
@@ -97,7 +88,6 @@ export class ForecastService implements ForecastSource {
         return toForecast(cached, false);
       }
       if (age < this.deps.policy.maxStaleMs) {
-        this.deps.onCacheOutcome?.('stale');
         this.deps.logger.info(
           { source: 'cache-stale', gridKey: cell.key, ageSeconds },
           'Forecast served STALE from cache; refreshing from Open-Meteo in the background',
@@ -108,7 +98,6 @@ export class ForecastService implements ForecastSource {
     }
 
     const reason = cached ? 'expired' : 'miss';
-    this.deps.onCacheOutcome?.(reason);
     this.deps.logger.info(
       { source: 'open-meteo', gridKey: cell.key, reason },
       reason === 'miss'

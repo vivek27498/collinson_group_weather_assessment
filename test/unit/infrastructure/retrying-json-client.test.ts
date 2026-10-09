@@ -71,22 +71,6 @@ describe('RetryingJsonClient', () => {
     expect(inner.getJson).toHaveBeenCalledTimes(1);
   });
 
-  it('reports each retry to the onRetry hook (metrics)', async () => {
-    const inner: jest.Mocked<JsonHttpClient> = { getJson: jest.fn() };
-    inner.getJson.mockRejectedValueOnce(retryable()).mockResolvedValueOnce({ ok: true });
-    const onRetry = jest.fn();
-    const client = new RetryingJsonClient(inner, {
-      maxRetries: 2,
-      sleep: () => Promise.resolve(),
-      onRetry,
-    });
-
-    await client.getJson(url, ctx);
-
-    expect(onRetry).toHaveBeenCalledWith('test.upstream');
-    expect(onRetry).toHaveBeenCalledTimes(1);
-  });
-
   it('backs off exponentially with jitter, capped at maxDelayMs', async () => {
     const { client, sleep } = setup([retryable(), retryable(), { ok: true }]);
     await client.getJson(url, ctx);

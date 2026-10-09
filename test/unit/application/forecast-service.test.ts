@@ -4,7 +4,6 @@ import {
   gridCell,
   joinByDate,
   MARINE_UNAVAILABLE_WARNING,
-  type CacheOutcome,
 } from '../../../src/application/forecast-service';
 import type {
   MarineForecastProvider,
@@ -39,8 +38,6 @@ function setup(
       options.marine ?? (() => Promise.resolve([aMarineDay({ date: '2026-10-07' })])),
     ),
   };
-  const outcomes: CacheOutcome[] = [];
-  const shared = { count: 0 };
   const service = new ForecastService({
     repository,
     weather,
@@ -48,10 +45,8 @@ function setup(
     clock,
     logger: createLogger({ level: 'silent' }),
     policy,
-    onCacheOutcome: (o) => outcomes.push(o),
-    onSharedFetch: () => shared.count++,
   });
-  return { service, repository, clock, weather, marine, outcomes, shared };
+  return { service, repository, clock, weather, marine };
 }
 
 describe('gridCell', () => {
@@ -75,7 +70,7 @@ describe('gridCell', () => {
 
 describe('ForecastService', () => {
   it('miss: fetches from the provider (at the cell centre), stores, and serves', async () => {
-    const { service, repository, weather, outcomes } = setup();
+    const { service, repository, weather } = setup();
 
     const forecast = await service.getForecast(biarritz);
 
@@ -85,11 +80,10 @@ describe('ForecastService', () => {
     expect(forecast).toMatchObject({ isStale: false, warnings: [] });
     expect(forecast.days[0]?.marine?.waveHeightMaxM).toBe(1.8);
     expect(repository.snapshots.get('43.5,-1.6')?.marineStatus).toBe('available');
-    expect(outcomes).toEqual(['miss']);
   });
 
   it('hit: serves from the cache without calling the provider while fresh', async () => {
-    const { service, clock, weather, outcomes } = setup();
+    const { service, clock, weather } = setup();
     const first = await service.getForecast(biarritz);
 
     clock.advance(3 * HOUR - 1);
@@ -97,11 +91,10 @@ describe('ForecastService', () => {
 
     expect(weather.getDailyForecast).toHaveBeenCalledTimes(1);
     expect(second).toEqual(first);
-    expect(outcomes).toEqual(['miss', 'hit']);
   });
 
   it('stale: serves the cached copy immediately (isStale) and refreshes in the background', async () => {
-    const { service, clock, weather, repository, outcomes } = setup();
+    const { service, clock, weather, repository } = setup();
     await service.getForecast(biarritz);
     const firstFetch = repository.snapshots.get('43.5,-1.6')?.fetchedAt;
 
@@ -113,14 +106,13 @@ describe('ForecastService', () => {
     await service.drain(); // let the background refresh finish
     expect(weather.getDailyForecast).toHaveBeenCalledTimes(2);
     expect(repository.snapshots.get('43.5,-1.6')?.fetchedAt).not.toEqual(firstFetch);
-    expect(outcomes).toEqual(['miss', 'stale']);
 
     // The next request gets the refreshed data.
     expect((await service.getForecast(biarritz)).isStale).toBe(false);
   });
 
   it('expired: beyond maxStale it fetches synchronously instead of serving old data', async () => {
-    const { service, clock, weather, outcomes } = setup();
+    const { service, clock, weather } = setup();
     await service.getForecast(biarritz);
 
     clock.advance(24 * HOUR);
@@ -128,7 +120,6 @@ describe('ForecastService', () => {
 
     expect(forecast.isStale).toBe(false);
     expect(weather.getDailyForecast).toHaveBeenCalledTimes(2);
-    expect(outcomes).toEqual(['miss', 'expired']);
   });
 
   it('stale + provider down: still serves stale data; the failed background refresh is only logged', async () => {
@@ -153,7 +144,7 @@ describe('ForecastService', () => {
   it('single-flight: concurrent requests for one cell share a single provider call', async () => {
     let release: () => void = () => undefined;
     const gate = new Promise<void>((resolve) => (release = resolve));
-    const { service, weather, shared } = setup({
+    const { service, weather } = setup({
       weather: async () => {
         await gate;
         return [aDay({ date: '2026-10-07' })];
@@ -165,7 +156,6 @@ describe('ForecastService', () => {
     const results = await Promise.all(requests);
 
     expect(weather.getDailyForecast).toHaveBeenCalledTimes(1);
-    expect(shared.count).toBe(49);
     expect(new Set(results.map((r) => r.fetchedAt.getTime())).size).toBe(1);
   });
 
