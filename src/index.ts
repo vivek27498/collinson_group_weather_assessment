@@ -1,37 +1,41 @@
 import { createApp } from './app';
 import { loadConfig } from './config/env';
-import { createServices } from './container';
+import { createServices } from './create-services';
 import { createGraphQLHandler } from './graphql/create-graphql-handler';
 import { createDatabase, pingDatabase } from './modules/database';
-import { PrismaForecastRepository } from './infrastructure/repositories/prisma-forecast-repository';
-import { PrismaGeocodeCache } from './infrastructure/repositories/prisma-geocode-cache';
+import { PrismaForecastRepository } from './repositories/prisma-forecast-repository';
+import { PrismaGeocodeStore } from './repositories/prisma-geocode-store';
 import { createLogger } from './modules/logger';
-import { createShutdownController, registerProcessHandlers } from './modules/lifecycle';
+import { setupGracefulShutdown } from './modules/lifecycle';
 
 /**
- * Composition root: the only place that reads the environment, creates long-lived
- * resources and touches the process (ports, signals). Everything else is injected.
+ * The app's starting point. This is the only file that reads environment variables, opens the
+ * database connection, starts listening on a port and handles process signals.
+ * Everything else receives what it needs through its constructor.
  */
 async function main(): Promise<void> {
   const config = loadConfig();
+
   const logger = createLogger({ level: config.logLevel, pretty: config.env === 'development' });
 
   const db = createDatabase(config.databaseUrl, { poolSize: config.databasePoolSize });
+
   const { rankingService, forecastService } = createServices(config, logger, {
     forecasts: new PrismaForecastRepository(db),
-    geocodes: new PrismaGeocodeCache(db),
+    geocodes: new PrismaGeocodeStore(db),
   });
+
   const graphql = await createGraphQLHandler({
     rankingService,
     isProduction: config.isProduction,
     limits: config.graphql,
   });
 
-  // /readyz needs the controller, and the controller needs the server the app creates.
-  // The closure only runs per request, long after `controller` is initialised below.
+  // /readyz needs `shutdown`, which is created further down (it needs `server` first).
+  // That's fine: this arrow function only runs when a request arrives, after startup is done.
   const app = createApp({
     logger,
-    isShuttingDown: () => controller.isShuttingDown(),
+    isShuttingDown: () => shutdown.isShuttingDown(),
     readinessCheck: () => pingDatabase(db),
     graphqlHandler: graphql.handler,
   });
@@ -40,19 +44,16 @@ async function main(): Promise<void> {
     logger.info({ port: config.port, env: config.env }, 'Server listening');
   });
 
-  const controller = createShutdownController({
+  const shutdown = setupGracefulShutdown({
     server,
     logger,
-    timeoutMs: 10_000,
-    // Closed in REVERSE order after the HTTP server drains: stop Apollo, let background
-    // forecast refreshes finish writing, then release the DB pool.
-    resources: [
-      { name: 'database', close: () => db.$disconnect() },
-      { name: 'background-refreshes', close: () => forecastService.drain() },
-      { name: 'apollo', close: graphql.stop },
-    ],
+    // Runs after in-flight requests have finished.
+    cleanup: async () => {
+      await graphql.stop(); // stop Apollo
+      await forecastService.drain(); // let background forecast saves finish
+      await db.$disconnect(); // close the database connections
+    },
   });
-  registerProcessHandlers(controller, logger);
 }
 
 main().catch((err: unknown) => {

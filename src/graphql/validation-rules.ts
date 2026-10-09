@@ -9,14 +9,13 @@ import {
 } from 'graphql';
 
 /**
- * Query-shape limits, checked during validation, before any resolver runs or any upstream call
- * is made.
+ * Limits on the shape of a query, checked BEFORE anything runs (no resolvers, no Open-Meteo calls).
  *
- * - Depth: stops pathologically nested queries. Our real queries are about 4 levels deep.
- * - Root fields: each `activityRankings` field triggers geocoding + forecast calls, so an
- *   attacker could alias it 500 times in one request
- *   (`{ a: activityRankings(...) b: activityRankings(...) ... }`). Depth limits don't catch
- *   that; this rule does. Body size (10kb) is the last backstop.
+ * - Depth: rejects absurdly nested queries. Our real queries are about 4 levels deep.
+ * - Root fields: each `activityRankings` field costs a geocoding and a forecast lookup, so an
+ *   attacker could repeat it 500 times in one request using aliases
+ *   (`{ a: activityRankings(...) b: activityRankings(...) ... }`). The depth limit doesn't catch
+ *   that; this rule does. The 10 kb body limit is the final safety net.
  */
 export function createValidationRules(limits: {
   maxDepth: number;

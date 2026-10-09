@@ -1,3 +1,3 @@
-/** Logging: structured logs that carry the current request id automatically. */
-export * from './logger'; // Structured JSON logger (pino) with secret redaction.
-export * from './request-context'; // Per-request context (request id) via AsyncLocalStorage.
+/** Logging: JSON logs that automatically include the current request id. */
+export * from './logger'; // the pino logger, with passwords and cookies hidden
+export * from './request-context'; // remembers the current request id across async code

@@ -6,22 +6,22 @@ import { ServiceUnavailableError } from './modules/errors';
 import { errorHandler, notFoundHandler, genReqId, sendSuccess } from './modules/express';
 
 export interface AppDependencies {
-  readonly logger: Logger;
+  logger: Logger;
   /** Readiness turns 503 while draining so load balancers stop routing new traffic here. */
-  readonly isShuttingDown?: () => boolean;
-  /** The GraphQL endpoint (Apollo). Optional so infrastructure tests can build the bare app. */
-  readonly graphqlHandler?: RequestHandler;
+  isShuttingDown?: () => boolean;
+  /** The GraphQL endpoint (Apollo). Optional so tests can build the app without it. */
+  graphqlHandler?: RequestHandler;
   /** Dependency check for /readyz (e.g. a DB ping). Throwing means "not ready". */
-  readonly readinessCheck?: () => Promise<void>;
+  readinessCheck?: () => Promise<void>;
 }
 
 /**
- * Builds the Express app without starting it, so tests can drive it with supertest
- * and the composition root (index.ts) owns process concerns (ports, signals).
+ * Builds the Express app but doesn't start it: index.ts starts the server, and tests call the
+ * app directly with supertest.
  *
- * Middleware order matters:
- *   request id + logging → security headers → body parsing (size-limited) → routes
- *   → 404 → error handler (always last).
+ * The order of middleware matters. Each request goes through, top to bottom:
+ *   request id + logging → security headers → JSON body (max 10 kb) → routes
+ *   → "404 not found" → error handler (always last, so it catches errors from everything above).
  */
 export function createApp({
   logger,
@@ -48,13 +48,14 @@ export function createApp({
   app.use(helmet());
   app.use(express.json({ limit: '10kb' }));
 
-  // Liveness: the process is up. Never depends on downstreams, or an outage would restart-loop us.
+  // "Liveness" check: is the process running? It deliberately does NOT check the database:
+  // if it did, a database outage would make Docker/Kubernetes restart every server, over and over.
   app.get('/healthz', (req, res) => {
     sendSuccess(req, res, { status: 'ok' });
   });
 
-  // Readiness: should this instance receive traffic? Not while draining, and not if the database
-  // is unreachable (the load balancer then routes to healthy instances).
+  // "Readiness" check: should this server get traffic right now? Not while shutting down, and not
+  // if the database is unreachable. The load balancer then sends requests to other servers.
   app.get('/readyz', async (req, res) => {
     if (isShuttingDown()) {
       throw new ServiceUnavailableError('Shutting down', { code: 'SHUTTING_DOWN' });

@@ -1,103 +1,110 @@
 import axios, { type AxiosInstance, type AxiosResponse } from 'axios';
 import { UpstreamUnavailableError } from '../errors';
 
-/** Minimal port for "GET this URL and give me parsed JSON". Adapters depend on this, not on axios. */
+/**
+ * Anything that can "GET this URL and give me back parsed JSON".
+ * The Open-Meteo code depends on this interface, not on axios, so the HTTP library can be swapped.
+ */
 export interface JsonHttpClient {
-  getJson(url: URL, context: RequestContext): Promise<unknown>;
+  /** `serviceName` is only used in logs and errors, e.g. "open-meteo.forecast". */
+  getJson(url: URL, serviceName: string): Promise<unknown>;
 }
 
-export interface RequestContext {
-  /** Logical name of the dependency, for logs/metrics (e.g. "open-meteo.forecast"). */
-  readonly upstream: string;
-}
-
-export type UpstreamFailure = 'timeout' | 'network' | 'http_status' | 'invalid_response';
+/** The ways an HTTP call can fail. */
+export type HttpFailure = 'timeout' | 'network' | 'http_status' | 'invalid_response';
 
 /**
- * A call to a dependency failed. It's an UpstreamUnavailableError, so the shared error policy
- * already knows how to present it (503, generic message, logged at error).
+ * Thrown when a call to an external service fails.
  *
- * The technical detail (which upstream, status, retryable?) is kept on the object for
- * logs and the retry decorator, and never shown to the client.
+ * It extends UpstreamUnavailableError, so the client only ever sees the generic message below
+ * (HTTP 503). The technical details (which service, status code, can we retry?) stay on the
+ * error object for our logs and the retry logic.
  */
-export class UpstreamRequestError extends UpstreamUnavailableError {
+export class HttpRequestError extends UpstreamUnavailableError {
+  serviceName: string;
+  failure: HttpFailure;
+  status: number | undefined;
+  retryable: boolean;
+
   constructor(
-    readonly upstream: string,
-    readonly failure: UpstreamFailure,
-    readonly status: number | undefined,
-    readonly retryable: boolean,
+    serviceName: string,
+    failure: HttpFailure,
+    status: number | undefined,
+    retryable: boolean,
     cause?: unknown,
   ) {
     super('The weather provider is temporarily unavailable', {
       code: 'UPSTREAM_UNAVAILABLE',
       cause,
     });
+    this.serviceName = serviceName;
+    this.failure = failure;
+    this.status = status;
+    this.retryable = retryable;
   }
 }
 
-/** 5xx and 429 are worth retrying; other 4xx mean *our* request is wrong, and retrying won't help. */
+/** 5xx and 429 (too many requests) may work on a retry. Other 4xx mean our request is wrong. */
 export function isRetryableStatus(status: number): boolean {
   return status >= 500 || status === 429;
 }
 
 export interface AxiosJsonClientOptions {
-  readonly timeoutMs: number;
+  timeoutMs: number;
 }
 
 /**
- * The plain client: one attempt with axios, bounded by a timeout, failures classified.
- * Retries are added by wrapping it (see RetryingJsonClient). That's the Decorator pattern.
+ * Makes ONE request with axios, with a timeout, and turns every failure into an HttpRequestError.
+ * Retries are added separately by RetryingJsonClient, which wraps this class.
  *
- * axios is configured to hand us the raw response (any status, body as text) so that *we*
- * decide what counts as a failure. By default axios throws on non-2xx statuses and quietly
- * returns invalid JSON as a string; here every outcome maps to one of our failure classes.
+ * By default axios throws on any non-2xx status and silently returns invalid JSON as a string.
+ * We switch both off and check the response ourselves, so every failure gets the right type.
  */
 export class AxiosJsonClient implements JsonHttpClient {
-  private readonly http: AxiosInstance;
+  private http: AxiosInstance;
 
   constructor(options: AxiosJsonClientOptions) {
     this.http = axios.create({
       timeout: options.timeoutMs,
       headers: { accept: 'application/json' },
-      responseType: 'text',
-      transformResponse: [(data: unknown) => data], // keep the raw body; we parse it below
-      validateStatus: () => true, // statuses are classified below, not thrown by axios
-      transitional: { clarifyTimeoutError: true }, // timeouts surface as ETIMEDOUT
+      responseType: 'text', // give us the raw body as text...
+      transformResponse: [(data: unknown) => data], // ...and don't try to parse it
+      validateStatus: () => true, // don't throw on 4xx/5xx; we check the status below
+      transitional: { clarifyTimeoutError: true }, // report timeouts as ETIMEDOUT
     });
   }
 
-  async getJson(url: URL, { upstream }: RequestContext): Promise<unknown> {
+  async getJson(url: URL, serviceName: string): Promise<unknown> {
+    // 1. Send the request. If it throws, we never got a response: timeout or network problem.
     let response: AxiosResponse<string>;
     try {
       response = await this.http.get<string>(url.toString());
     } catch (err) {
-      const timedOut =
+      const isTimeout =
         axios.isAxiosError(err) && (err.code === 'ETIMEDOUT' || err.code === 'ECONNABORTED');
-      throw new UpstreamRequestError(
-        upstream,
-        timedOut ? 'timeout' : 'network',
-        undefined,
-        true,
-        err,
-      );
+      const failure = isTimeout ? 'timeout' : 'network';
+      throw new HttpRequestError(serviceName, failure, undefined, true, err);
     }
 
-    if (response.status < 200 || response.status >= 300) {
-      // Keep a short excerpt of the body for logs; it is never shown to the client.
-      const excerpt = response.data.slice(0, 200);
-      throw new UpstreamRequestError(
-        upstream,
+    // 2. We got a response, but with an error status.
+    const isSuccess = response.status >= 200 && response.status < 300;
+    if (!isSuccess) {
+      // Keep the start of the body for our logs. The client never sees it.
+      const bodyStart = response.data.slice(0, 200);
+      throw new HttpRequestError(
+        serviceName,
         'http_status',
         response.status,
         isRetryableStatus(response.status),
-        new Error(`HTTP ${response.status}: ${excerpt}`),
+        new Error(`HTTP ${response.status}: ${bodyStart}`),
       );
     }
 
+    // 3. Success status, but the body must still be valid JSON.
     try {
       return JSON.parse(response.data) as unknown;
     } catch (err) {
-      throw new UpstreamRequestError(upstream, 'invalid_response', response.status, false, err);
+      throw new HttpRequestError(serviceName, 'invalid_response', response.status, false, err);
     }
   }
 }

@@ -5,17 +5,17 @@ export type Database = PrismaClient;
 
 export interface DatabaseOptions {
   /**
-   * Maximum open connections in the pool. Every request that misses the in-process work holds a
-   * connection briefly, so this caps DB concurrency per instance. Load testing showed it was the
-   * main throughput lever (10 → 20 connections: 69 → 200 req/s on the warm path).
+   * The most database connections this server keeps open at once (the "connection pool").
+   * Each query borrows a connection and gives it back. A load test showed this was the main
+   * limit on speed for cached requests (10 → 20 connections: 69 → 200 requests per second).
    */
-  readonly poolSize?: number;
+  poolSize?: number;
 }
 
 /**
- * Prisma 7 talks to MySQL through a driver adapter (the MariaDB connector, which speaks the
- * MySQL protocol). The adapter owns a connection pool, sized explicitly here and released by
- * `$disconnect()` during graceful shutdown.
+ * Creates the Prisma client. Prisma 7 connects to MySQL through the MariaDB driver (MariaDB
+ * and MySQL use the same protocol). The driver keeps the connection pool; `$disconnect()`
+ * closes it during shutdown.
  */
 export function createDatabase(databaseUrl: string, options: DatabaseOptions = {}): Database {
   return new PrismaClient({
@@ -23,7 +23,7 @@ export function createDatabase(databaseUrl: string, options: DatabaseOptions = {
   });
 }
 
-/** Sets the connector's `connectionLimit` on the URL, unless the URL already specifies one. */
+/** Adds `connectionLimit=<poolSize>` to the database URL, unless the URL already sets it. */
 export function withPoolSize(databaseUrl: string, poolSize: number | undefined): string {
   if (poolSize === undefined) return databaseUrl;
   const url = new URL(databaseUrl);
@@ -33,7 +33,7 @@ export function withPoolSize(databaseUrl: string, poolSize: number | undefined):
   return url.toString();
 }
 
-/** Readiness probe: a trivial round-trip. Tagged template, so it's parameterised like all SQL here. */
+/** Used by /readyz: a tiny query to check the database is reachable. */
 export async function pingDatabase(db: Database): Promise<void> {
   await db.$queryRaw`SELECT 1`;
 }

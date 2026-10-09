@@ -124,7 +124,7 @@ Unpolished notes on how the work is going, newest last. Cuts and the reasons for
 - Prisma 7 (MariaDB driver adapter) on MySQL 8.4. Schema: locations, geocode_queries,
   forecast_snapshots (one per 0.1° grid cell), daily_forecasts. Migrations run as `migrator` via a
   one-shot compose service; the app connects as `app` (DML only).
-- ForecastService: cache-aside + stale-while-revalidate + single-flight. CachedGeocoder: decorator
+- ForecastService: cache-aside + stale-while-revalidate + single-flight. DbFirstGeocoder: decorator
   with positive and negative TTLs. RankingService is now just orchestration.
 - /readyz pings MySQL. Shutdown order: Apollo → drain background refreshes → DB disconnect.
 - Measured: cold Chamonix call 2.2 s, cached 44 ms. Fresh compose stack: 1.2 s cold, 17-22 ms cached.
@@ -219,3 +219,35 @@ Unpolished notes on how the work is going, newest last. Cuts and the reasons for
 - **Security:** `npm audit` now reports high-severity advisories in the `mariadb` connector (no fix yet).
   Assessed in ADR-004: only the credential-leak-despite-TLS one is relevant; mitigation is a private network.
 - 341 tests passing.
+
+## 2026-10-09: Readability pass (my request)
+
+- **Why:** reading the code as a newcomer, the names and comments leaned on architecture vocabulary
+  (ports, adapters, application layer, single-flight, deps) and clever TypeScript. Someone new to the codebase
+  should be able to follow it quickly.
+- **Folders renamed** with `git mv` (history kept): `domain/scoring` → `scoring/`, `domain/types.ts` → `types.ts`,
+  `application/` → `services/` (`ports.ts` → `interfaces.ts`), `infrastructure/open-meteo` → `providers/open-meteo`,
+  `infrastructure/repositories` → `repositories/`. The `ScoringConfig` type moved next to its values in `config/scoring.ts`.
+- **Names:** `SingleFlight` → `RequestDeduplicator`, `UpstreamRequestError` → `HttpRequestError`,
+  `getJson(url, { upstream })` → `getJson(url, serviceName)`, `combine` → `calculateScore`, `fmt` → `formatNumber`,
+  `this.deps.x` → plain `this.x` fields.
+- **TypeScript:** removed `readonly` everywhere (noise for a reader), turned off `exactOptionalPropertyTypes`
+  (it forced `...(x ? { x } : {})` spreads), replaced a mapped-type guard with plain null checks, and split
+  dense one-liners (e.g. the 3-part `||` sort became `compareActivities`).
+- **Comments** rewritten in plain English; pattern names kept in brackets where they help.
+- **Unchanged:** behaviour, the GraphQL API, error codes, log messages, the database. All 341 tests passed
+  with only import paths and renamed identifiers changed in the tests.
+
+## 2026-10-09: Two-column key for saved searches
+
+- `geocode_queries` used one `query_key` string (`"paris|US"`) as its primary key. It now has two columns,
+  `name` + `country_code`, with a two-column primary key: one column per fact, readable and queryable.
+  "No country" is stored as `''`, because MySQL doesn't allow NULL in a primary key.
+- New migration `20261009120000_geocode_queries_two_columns` drops and recreates the table. It only holds
+  saved search results, so nothing is lost: searches are simply looked up again.
+  `prisma migrate diff` confirms the schema and migrations match.
+- Only the storage changed (`GeocodeStore` now takes `{ name, countryCode }`). The lookup flow, expiry times,
+  deduplication and log lines are unchanged; the `"paris|US"` label is still used in memory and in logs.
+- Also: shutdown handling simplified to one `setupGracefulShutdown` function, `container.ts` renamed to
+  `create-services.ts`, and the geocoder classes renamed to say "database" (`DbFirstGeocoder`, `GeocodeStore`).
+- 338 tests passing (303 unit + 35 integration).

@@ -1,8 +1,8 @@
 import { z } from 'zod';
 
 /**
- * Environment is parsed once at startup and the service refuses to boot on bad config.
- * Failing fast here is cheaper than discovering a typo in DATABASE_URL on the first request.
+ * Reads and checks all environment variables once, at startup. If anything is wrong the app
+ * refuses to start, which is much better than finding a typo in DATABASE_URL on the first request.
  */
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
@@ -13,14 +13,13 @@ const envSchema = z.object({
     .refine((url) => url.startsWith('mysql://'), 'DATABASE_URL must be a mysql:// URL'),
   DB_POOL_SIZE: z.coerce.number().int().min(1).max(100).default(10),
 
-  // Upstream hosts come from config, never from user input (no SSRF). Overridable so load
-  // tests can point at a mock instead of hammering the real (free, rate-limited) API.
+  // Open-Meteo addresses come from config, never from user input (so users can't make us call
+  // other servers). They can be changed to point tests at a fake server instead of the real API.
   OPEN_METEO_GEOCODING_URL: z.url().default('https://geocoding-api.open-meteo.com/v1/search'),
   OPEN_METEO_FORECAST_URL: z.url().default('https://api.open-meteo.com/v1/forecast'),
   OPEN_METEO_MARINE_URL: z.url().default('https://marine-api.open-meteo.com/v1/marine'),
-  // Tuned from measurement: Open-Meteo's forecast endpoint took 1.4-3.1 s (2026-10-07). A 3 s
-  // timeout aborted healthy-but-slow responses and the retries piled on more slow requests.
-  // Per-attempt timeout sits above the observed max; one retry bounds the worst case (~12 s).
+  // Chosen from real measurements: Open-Meteo took 1.4–3.1 s (2026-10-07). A 3 s timeout cut off
+  // slow-but-fine responses. 6 s is above the slowest we saw; one retry caps the worst case (~12 s).
   UPSTREAM_TIMEOUT_MS: z.coerce.number().int().min(100).max(30_000).default(6000),
   UPSTREAM_MAX_RETRIES: z.coerce.number().int().min(0).max(5).default(1),
 
@@ -39,25 +38,25 @@ const envSchema = z.object({
 export type Env = z.infer<typeof envSchema>;
 
 export interface AppConfig {
-  readonly env: Env['NODE_ENV'];
-  readonly isProduction: boolean;
-  readonly port: number;
-  readonly logLevel: Env['LOG_LEVEL'];
-  readonly databaseUrl: string;
-  readonly databasePoolSize: number;
-  readonly openMeteo: {
-    readonly geocodingUrl: string;
-    readonly forecastUrl: string;
-    readonly marineUrl: string;
+  env: Env['NODE_ENV'];
+  isProduction: boolean;
+  port: number;
+  logLevel: Env['LOG_LEVEL'];
+  databaseUrl: string;
+  databasePoolSize: number;
+  openMeteo: {
+    geocodingUrl: string;
+    forecastUrl: string;
+    marineUrl: string;
   };
-  readonly upstream: { readonly timeoutMs: number; readonly maxRetries: number };
-  readonly graphql: { readonly maxDepth: number; readonly maxRootFields: number };
-  readonly cache: {
-    readonly forecastFreshMs: number;
-    readonly forecastDegradedFreshMs: number;
-    readonly forecastMaxStaleMs: number;
-    readonly geocodeTtlMs: number;
-    readonly geocodeNegativeTtlMs: number;
+  upstream: { timeoutMs: number; maxRetries: number };
+  graphql: { maxDepth: number; maxRootFields: number };
+  cache: {
+    forecastFreshMs: number;
+    forecastDegradedFreshMs: number;
+    forecastMaxStaleMs: number;
+    geocodeTtlMs: number;
+    geocodeNegativeTtlMs: number;
   };
 }
 
@@ -66,7 +65,7 @@ const HOUR = 60 * MINUTE;
 const DAY = 24 * HOUR;
 
 export class ConfigError extends Error {
-  constructor(readonly issues: readonly string[]) {
+  constructor(issues: string[]) {
     super(`Invalid configuration:\n  - ${issues.join('\n  - ')}`);
     this.name = 'ConfigError';
   }

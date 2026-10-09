@@ -40,5 +40,5 @@ Defence in depth: no single layer is trusted on its own.
 10. **Container.** A multi-stage image with production dependencies only, running as the non-root `node` user.
 
 Tests with injection payloads (`'; DROP TABLE locations;--`, `Paris' OR '1'='1`, XSS, log injection,
-path traversal) are in `test/unit/application/ranking-input.test.ts` and the GraphQL integration tests.
+path traversal) are in `test/unit/services/ranking-input.test.ts` and the GraphQL integration tests.
 They assert that the input is rejected before any provider call.

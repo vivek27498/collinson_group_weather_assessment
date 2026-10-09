@@ -1,10 +1,11 @@
 import type {
-  CachedGeocode,
+  GeocodeSearch,
+  SavedGeocode,
   ForecastRepository,
   ForecastSnapshot,
-  GeocodeCache,
-} from '../../src/application/ports';
-import type { GeoLocation } from '../../src/domain/types';
+  GeocodeStore,
+} from '../../src/services/interfaces';
+import type { GeoLocation } from '../../src/types';
 
 /**
  * In-memory implementations of the persistence ports. Because the application only depends on
@@ -30,21 +31,26 @@ export class InMemoryForecastRepository implements ForecastRepository {
   }
 }
 
-export class InMemoryGeocodeCache implements GeocodeCache {
-  readonly entries = new Map<string, CachedGeocode>();
+export class InMemoryGeocodeStore implements GeocodeStore {
+  readonly entries = new Map<string, SavedGeocode>();
   failReads = false;
   failWrites = false;
 
-  get(queryKey: string): Promise<CachedGeocode | null> {
+  get(search: GeocodeSearch): Promise<SavedGeocode | null> {
     if (this.failReads) return Promise.reject(new Error('db down'));
-    return Promise.resolve(this.entries.get(queryKey) ?? null);
+    return Promise.resolve(this.entries.get(keyOf(search)) ?? null);
   }
 
-  put(queryKey: string, locations: readonly GeoLocation[], fetchedAt: Date): Promise<void> {
+  put(search: GeocodeSearch, locations: readonly GeoLocation[], fetchedAt: Date): Promise<void> {
     if (this.failWrites) return Promise.reject(new Error('db down'));
-    this.entries.set(queryKey, { locations: [...locations], fetchedAt });
+    this.entries.set(keyOf(search), { locations: [...locations], fetchedAt });
     return Promise.resolve();
   }
+}
+
+/** One Map key per (name, countryCode) pair, like the table's two-column primary key. */
+function keyOf(search: GeocodeSearch): string {
+  return JSON.stringify([search.name, search.countryCode]);
 }
 
 /** A clock tests can move forward explicitly. */

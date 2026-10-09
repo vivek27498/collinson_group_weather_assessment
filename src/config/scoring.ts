@@ -1,4 +1,68 @@
-import type { ScoringConfig } from '../domain/scoring/scoring-config';
+import type { RampRule } from '../scoring/score';
+
+/** A fixed number of points (negative = penalty, positive = bonus). */
+export interface FixedRule {
+  points: number;
+}
+
+/**
+ * The shape of all scoring settings. A RampRule is a penalty that grows gradually from
+ * `from` (0 points) to `to` (maxPoints); a FixedRule is all-or-nothing.
+ */
+export interface ScoringConfig {
+  ratingBands: {
+    excellent: number;
+    good: number;
+    fair: number;
+  };
+  /** Weekly score = average of this many best days. */
+  weeklyTopDays: number;
+
+  skiing: {
+    /** Penalty grows as snow depth falls from `from` m to `to` m. */
+    snowDepthM: RampRule;
+    unknownSnowDepth: FixedRule;
+    freshSnowfall: FixedRule & { minCm: number };
+    warmTempC: RampRule;
+    extremeCold: FixedRule & { belowC: number };
+    gustsKmh: RampRule;
+    rain: FixedRule;
+    thunderstorm: FixedRule;
+    fog: FixedRule;
+    lowElevation: FixedRule & { belowM: number };
+  };
+
+  surfing: {
+    /** Below the 1 m sweet spot: penalty grows as waves shrink. */
+    smallWavesM: RampRule;
+    /** Above the 2.5 m sweet spot: penalty grows as waves get dangerous for most surfers. */
+    bigWavesM: RampRule;
+    shortPeriodS: RampRule;
+    windKmh: RampRule;
+    coldAir: FixedRule & { belowC: number };
+    thunderstorm: FixedRule;
+  };
+
+  outdoor: {
+    coldTempC: RampRule;
+    hotTempC: RampRule;
+    precipitationMm: RampRule;
+    precipitationProbabilityPct: RampRule;
+    windKmh: RampRule;
+    thunderstorm: FixedRule;
+    fog: FixedRule;
+    snow: FixedRule;
+    sunshine: FixedRule & { minHours: number };
+    highUv: FixedRule & { atLeast: number };
+  };
+
+  indoor: {
+    /** Museums and galleries are open in any weather, so indoor is always a decent option. */
+    baseline: number;
+    /** How much of the outdoor "deficit" (100 - outdoor score) turns into an indoor boost. */
+    outdoorDeficitWeight: number;
+  };
+}
 
 /**
  * Every threshold the scorers use lives here, not inside the scoring code.

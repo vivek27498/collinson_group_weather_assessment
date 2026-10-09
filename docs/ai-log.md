@@ -68,3 +68,22 @@ and code, and I made the calls. This log records where I steered it, and what I 
   over a minimal "only axios + database" move.
 - **Caught along the way:** a nock/axios interop quirk, and new `mariadb` connector advisories, which were
   assessed rather than ignored.
+
+## Session 6: Readability pass (2026-10-09)
+
+- **I asked** for the code to be easier to read for a new developer: the names and comments were too "professional".
+- **The AI proposed** three levels (comments only / readability pass / readability plus simpler folders), and
+  listed every rename before touching anything. I chose the full option and asked to approve the list first.
+- **Kept on purpose:** the architecture, `strict` mode and `noUncheckedIndexedAccess` (real safety), and the
+  pattern names in brackets in comments, so the interview vocabulary still maps to the code.
+
+## Session 7: Walking through the code file by file (2026-10-09)
+
+- **I asked** whether graceful shutdown was over-built for an assessment. The AI explained when it matters
+  (a deploy or `docker stop` mid-request) and offered a simpler version; I chose the simpler one: one function
+  with a single `cleanup()`.
+- **I asked** to rename `container.ts` (it's one function, not a DI container) → `create-services.ts`, and to rename
+  the geocoder classes so they say "database", not "cache" (`DbFirstGeocoder`, `GeocodeStore`).
+- **I questioned** the `"paris|US"` primary key. The AI agreed two columns is better practice; I asked for the change
+  with the condition that the core logic must not change. Only the storage layer changed; the AI verified it with
+  `prisma migrate diff`, the real-MySQL tests, and a live call against the rebuilt Docker stack.

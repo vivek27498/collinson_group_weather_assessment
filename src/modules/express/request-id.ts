@@ -4,17 +4,21 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 export const REQUEST_ID_HEADER = 'x-request-id';
 
 /**
- * Only accept a caller's request id if it looks like an id. Anything else (very long
- * values, newlines, control characters) could be used for log injection, so we replace it.
+ * A caller may send their own request id (header x-request-id). We only accept it if it looks
+ * like an id: letters, digits, '.', '_' or '-', up to 64 characters. Anything else (e.g. a
+ * newline) could be used to forge fake log lines, so we generate a new id instead.
  */
 const SAFE_REQUEST_ID = /^[A-Za-z0-9._-]{1,64}$/;
 
 export function resolveRequestId(incoming: string | string[] | undefined): string {
   const candidate = Array.isArray(incoming) ? incoming[0] : incoming;
-  return candidate !== undefined && SAFE_REQUEST_ID.test(candidate) ? candidate : randomUUID();
+  if (candidate !== undefined && SAFE_REQUEST_ID.test(candidate)) {
+    return candidate;
+  }
+  return randomUUID();
 }
 
-/** Plugged into pino-http as `genReqId`, so every log line and the response share one id. */
+/** Used by pino-http to pick each request's id. The id is also sent back in the response header. */
 export function genReqId(req: IncomingMessage, res: ServerResponse): string {
   const id = resolveRequestId(req.headers['x-request-id']);
   res.setHeader(REQUEST_ID_HEADER, id);

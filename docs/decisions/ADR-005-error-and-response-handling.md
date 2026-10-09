@@ -19,8 +19,8 @@ Without one policy, each handler invents its own status codes and messages, and 
   `{ success, data | error: { code, message, details? }, meta: { requestId, timestamp } }`.
 - **Express 5** forwards async errors natively, so handlers just `throw`. We considered `express-async-errors`
   and rejected it, because it only patches Express 4.
-- GraphQL keeps its spec-defined `{ data, errors }` shape, but Apollo's `formatError` will reuse the
-  **same mapper** (M6). Expected domain outcomes (e.g. LocationNotFound) are modelled as **union result types**.
+- GraphQL keeps its spec-defined `{ data, errors }` shape, but Apollo's `formatError`
+  (`src/graphql/format-error.ts`) reuses the **same mapper**. Expected domain outcomes (e.g. LocationNotFound) are modelled as **union result types**.
 
 ## Consequences
 

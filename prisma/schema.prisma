@@ -30,14 +30,18 @@ model Location {
   @@map("locations")
 }
 
-/// A cached geocoding answer for a normalised query ("paris|US").
-/// An empty list is a cached "not found" (negative caching), with a shorter TTL.
+/// A saved geocoding answer for one search: the place name (lower-cased) + the country filter.
+/// An empty list is a saved "not found" (negative caching), kept for a shorter time.
 model GeocodeQuery {
-  queryKey    String   @id @map("query_key") @db.VarChar(120)
+  /// Lower-cased place name, e.g. "paris".
+  name        String   @db.VarChar(120)
+  /// Country filter, e.g. "US", or '' when the search had none ('' because a primary key can't be NULL).
+  countryCode String   @map("country_code") @db.VarChar(2)
   /// Candidate location ids, best match first.
   locationIds Json     @map("location_ids")
   fetchedAt   DateTime @map("fetched_at") @db.DateTime(3)
 
+  @@id([name, countryCode])
   @@map("geocode_queries")
 }
 

@@ -4,9 +4,9 @@ import { currentRequestContext } from './request-context';
 export type { Logger };
 
 /**
- * Structured JSON logs (one line per event) so they can be shipped to any log backend
- * and queried by field (requestId, code, durationMs) instead of grepped.
- * Anything that could carry a credential is redacted at the logger, not at call sites.
+ * Logs are written as JSON, one line per event, so a log tool can search them by field
+ * (requestId, source, durationMs) instead of searching plain text.
+ * Fields that could contain secrets are replaced with "[REDACTED]" automatically.
  */
 export const REDACT_PATHS = [
   'req.headers.authorization',
@@ -28,8 +28,7 @@ export function createLogger(options: {
     base: { service: 'weather-activity-ranking' },
     timestamp: pino.stdTimeFunctions.isoTime,
     redact: { paths: REDACT_PATHS, censor: '[REDACTED]' },
-    // Every line logged while handling a request carries its id, even from components that were
-    // built at startup with this root logger (see request-context.ts).
+    // Adds the current request id to every log line automatically (see request-context.ts).
     mixin: () => {
       const context = currentRequestContext();
       return context ? { requestId: context.requestId } : {};

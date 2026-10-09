@@ -1,3 +1,3 @@
-/** Errors: one taxonomy and one policy, shared by every transport. */
-export * from './app-error'; // Error taxonomy: transport-agnostic kinds and stable codes.
-export * from './error-mapper'; // The single error policy: status, client message, log level.
+/** Error handling shared by REST and GraphQL. */
+export * from './app-error'; // our error classes (ValidationError, NotFoundError, ...)
+export * from './error-mapper'; // mapError: decides status code, client message and log level

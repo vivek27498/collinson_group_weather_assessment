@@ -1,6 +1,6 @@
 # ADR-003: Cache-aside with stale-while-revalidate and single-flight
 
-**Status:** implemented (slice 3): `src/application/forecast-service.ts`, `cached-geocoder.ts`, `single-flight.ts`
+**Status:** implemented: `src/services/forecast-service.ts`, `db-first-geocoder.ts`, `request-deduplicator.ts` (single-flight)
 
 ## Decision
 

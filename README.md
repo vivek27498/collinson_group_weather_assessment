@@ -112,17 +112,29 @@ Endpoints: `POST /graphql`, `GET /healthz` (liveness), `GET /readyz` (DB + drain
 | Unknown place / bad input                | `LocationNotFound` / `InvalidInput` union members: data, not errors                                                         |
 | Provider slow or down                    | Cache with stale-while-revalidate; serves `isStale: true` data instead of failing; marine-only outages degrade just surfing |
 
-**Architecture.** Hexagonal-lite: a pure **domain** (scoring), **application** use cases behind ports,
-**infrastructure** adapters (Open-Meteo, Prisma), and a thin GraphQL layer, wired by constructor
-injection in one composition root. Patterns used where they earn their place: Strategy + Registry
-(scorers), Decorator (`RetryingJsonClient(AxiosJsonClient)`, `CachedGeocoder`), Repository, anti-corruption
-mappers with Zod. ([ADR-002](docs/decisions/ADR-002-architecture-hexagonal-lite.md))
+**Architecture.** Hexagonal-lite: pure **scoring** rules, **services** that only talk to interfaces,
+**providers** (Open-Meteo) and **repositories** (MySQL) that implement those interfaces, and a thin
+GraphQL layer. Everything is wired by constructor injection in one place (`create-services.ts`). Patterns used
+where they earn their place: Strategy + Registry (scorers), Decorator (`RetryingJsonClient(AxiosJsonClient)`,
+`DbFirstGeocoder`), Repository, and Zod validation of every Open-Meteo response.
+([ADR-002](docs/decisions/ADR-002-architecture-hexagonal-lite.md))
 
-**Code layout.** Reusable infrastructure with no weather knowledge lives in `src/modules/`, one folder per
-module with an `index.ts` as its public API: `http` (axios client + retries), `database` (Prisma + pool),
-`logger` (pino + request-id context), `errors` (taxonomy + error policy), `express` (envelope, error
-middleware, request ids) and `lifecycle` (graceful shutdown). Business code lives in `domain/`,
-`application/`, `graphql/` and `infrastructure/` (Open-Meteo adapters and Prisma repositories).
+**Code layout.** Folder names say what they hold:
+
+```
+src/
+  index.ts, create-services.ts, app.ts   start-up, wiring, Express app
+  types.ts                         shared data types
+  scoring/                         the four scorers and the ranking (pure functions)
+  services/                        RankingService, ForecastService, DbFirstGeocoder, input validation
+  providers/open-meteo/            Open-Meteo geocoding, forecast and marine clients
+  repositories/                    MySQL storage through Prisma
+  graphql/                         schema, resolvers, Apollo setup
+  config/                          environment variables and scoring thresholds
+  modules/                         reusable code with no weather knowledge:
+                                   http (axios + retries), database (Prisma + pool), logger,
+                                   errors, express helpers, lifecycle (graceful shutdown)
+```
 
 **Persistence and refresh.** Forecasts are cached per ~11 km grid cell in MySQL. Fresh for 3 h, served
 stale up to 24 h while refreshing in the background, and single-flighted so 200 concurrent requests for a
@@ -149,7 +161,7 @@ Full list with reasoning: [docs/questions-and-assumptions.md](docs/questions-and
 
 ## Testing
 
-- **341 tests**, 99% line coverage across the full suite:
+- **338 tests**, 99% line coverage across the full suite:
   - Table-driven unit tests for the scoring rules.
   - Cache behaviour with a fake clock (fresh, stale, expired, stampede, outages).
   - Recorded real Open-Meteo payloads for the adapters.

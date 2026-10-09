@@ -1,9 +1,5 @@
 import nock from 'nock';
-import {
-  AxiosJsonClient,
-  isRetryableStatus,
-  UpstreamRequestError,
-} from '../../../../src/modules/http';
+import { AxiosJsonClient, isRetryableStatus, HttpRequestError } from '../../../../src/modules/http';
 import { UpstreamUnavailableError } from '../../../../src/modules/errors';
 
 /**
@@ -12,14 +8,14 @@ import { UpstreamUnavailableError } from '../../../../src/modules/errors';
  */
 const HOST = 'https://api.example.test';
 const url = new URL(`${HOST}/v1/forecast?latitude=1`);
-const ctx = { upstream: 'test.upstream' };
+const serviceName = 'test.service';
 const client = (timeoutMs = 1000) => new AxiosJsonClient({ timeoutMs });
 
-async function captureError(promise: Promise<unknown>): Promise<UpstreamRequestError> {
+async function captureError(promise: Promise<unknown>): Promise<HttpRequestError> {
   try {
     await promise;
   } catch (err) {
-    if (err instanceof UpstreamRequestError) return err;
+    if (err instanceof HttpRequestError) return err;
     throw err;
   }
   throw new Error('expected the call to fail');
@@ -42,7 +38,7 @@ describe('AxiosJsonClient', () => {
       .query({ latitude: '1' })
       .reply(200, { ok: 1 });
 
-    await expect(client().getJson(url, ctx)).resolves.toEqual({ ok: 1 });
+    await expect(client().getJson(url, serviceName)).resolves.toEqual({ ok: 1 });
     expect(scope.isDone()).toBe(true);
   });
 
@@ -55,13 +51,13 @@ describe('AxiosJsonClient', () => {
   ])('classifies HTTP %i as retryable=%p', async (status, retryable) => {
     nock(HOST).get('/v1/forecast').query(true).reply(status, { error: true, reason: 'x' });
 
-    const error = await captureError(client().getJson(url, ctx));
+    const error = await captureError(client().getJson(url, serviceName));
 
     expect(error).toMatchObject({
       failure: 'http_status',
       status,
       retryable,
-      upstream: 'test.upstream',
+      serviceName: 'test.service',
     });
     expect(isRetryableStatus(status)).toBe(retryable);
   });
@@ -73,7 +69,7 @@ describe('AxiosJsonClient', () => {
     try {
       const refused = new URL('http://127.0.0.1:9/v1/forecast');
 
-      await expect(captureError(client().getJson(refused, ctx))).resolves.toMatchObject({
+      await expect(captureError(client().getJson(refused, serviceName))).resolves.toMatchObject({
         failure: 'network',
         retryable: true,
       });
@@ -85,7 +81,7 @@ describe('AxiosJsonClient', () => {
   it('times out a slow upstream and marks it retryable', async () => {
     nock(HOST).get('/v1/forecast').query(true).delay(300).reply(200, { ok: 1 });
 
-    await expect(captureError(client(50).getJson(url, ctx))).resolves.toMatchObject({
+    await expect(captureError(client(50).getJson(url, serviceName))).resolves.toMatchObject({
       failure: 'timeout',
       retryable: true,
     });
@@ -94,7 +90,7 @@ describe('AxiosJsonClient', () => {
   it('rejects a non-JSON body as a non-retryable invalid response', async () => {
     nock(HOST).get('/v1/forecast').query(true).reply(200, '<html>oops</html>');
 
-    await expect(captureError(client().getJson(url, ctx))).resolves.toMatchObject({
+    await expect(captureError(client().getJson(url, serviceName))).resolves.toMatchObject({
       failure: 'invalid_response',
       retryable: false,
     });
@@ -103,7 +99,7 @@ describe('AxiosJsonClient', () => {
   it('is an UpstreamUnavailableError with a client-safe message (no URL, status or body)', async () => {
     nock(HOST).get('/v1/forecast').query(true).reply(500, 'internal stack trace at db-01.internal');
 
-    const error = await captureError(client().getJson(url, ctx));
+    const error = await captureError(client().getJson(url, serviceName));
 
     expect(error).toBeInstanceOf(UpstreamUnavailableError);
     expect(error.message).toBe('The weather provider is temporarily unavailable');

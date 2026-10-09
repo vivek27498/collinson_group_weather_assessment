@@ -1,4 +1,4 @@
-import type { DailyWeather, DayConditions, MarineDay } from '../../src/domain/types';
+import type { DailyWeather, DayConditions, MarineDay } from '../../src/types';
 
 /**
  * Test data builders: each test states only what's *different* about its day, so the

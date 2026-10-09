@@ -2,31 +2,32 @@ import type { Request, Response } from 'express';
 import type { ErrorDetail, MappedError } from '../errors';
 
 /**
- * One response envelope for every REST endpoint, so clients can always check `success`
- * first and find the request id when they report a problem.
+ * Every REST response has the same shape:
+ *   { success: true,  data: {...},  meta: { requestId, timestamp } }
+ *   { success: false, error: { code, message, details? }, meta: { requestId, timestamp } }
+ * so clients can always check `success` first, and quote the requestId when reporting a problem.
  *
- * (GraphQL keeps its spec-defined { data, errors } shape. It shares the same *error
- * policy* through error-mapper, not this envelope.)
+ * (GraphQL responses keep GraphQL's standard { data, errors } shape instead.)
  */
 export interface ResponseMeta {
-  readonly requestId: string;
-  readonly timestamp: string;
+  requestId: string;
+  timestamp: string;
 }
 
 export interface SuccessBody<T> {
-  readonly success: true;
-  readonly data: T;
-  readonly meta: ResponseMeta;
+  success: true;
+  data: T;
+  meta: ResponseMeta;
 }
 
 export interface ErrorBody {
-  readonly success: false;
-  readonly error: {
-    readonly code: string;
-    readonly message: string;
-    readonly details?: readonly ErrorDetail[];
+  success: false;
+  error: {
+    code: string;
+    message: string;
+    details?: ErrorDetail[];
   };
-  readonly meta: ResponseMeta;
+  meta: ResponseMeta;
 }
 
 export function buildMeta(req: Request, now: Date = new Date()): ResponseMeta {
@@ -46,7 +47,7 @@ export function buildErrorBody(req: Request, mapped: MappedError): ErrorBody {
     error: {
       code: mapped.code,
       message: mapped.message,
-      ...(mapped.details ? { details: mapped.details } : {}),
+      details: mapped.details,
     },
     meta: buildMeta(req),
   };

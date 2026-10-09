@@ -2,28 +2,28 @@ import { ZodError } from 'zod';
 import { AppError, ErrorKind, type ErrorDetail } from './app-error';
 
 /**
- * THE single error policy for the service.
+ * The ONE place that decides how every error is handled.
  *
- * Every transport (the Express error middleware now, Apollo's formatError later) runs
- * errors through `mapError`. That's where we decide, in one place:
- *   - which category an error belongs to,
- *   - what status/code the client sees,
- *   - whether the original message is safe to expose,
- *   - how loudly to log it.
+ * Both the Express error handler (REST) and format-error.ts (GraphQL) call `mapError`, which
+ * decides:
+ *   - what kind of error it is,
+ *   - which status code and error code the client gets,
+ *   - whether the message is safe to show the client,
+ *   - whether to log it as a warning or an error.
  *
- * Rule of thumb: errors we *expected* (AppError, validation) are exposed and logged at warn.
- * Anything else is a bug or an infrastructure failure. The client gets a generic message
- * (no stack, no SQL, no hostnames) and we log the full error at error level.
+ * Rule of thumb: errors we EXPECTED (an AppError, bad input) are shown to the client and logged
+ * as warnings. Anything else is a bug or an outage: the client gets a generic message (no stack
+ * trace, no SQL, no hostnames) and we log the full error.
  */
 export interface MappedError {
-  readonly kind: ErrorKind;
-  readonly code: string;
-  readonly httpStatus: number;
-  readonly message: string;
-  readonly details?: readonly ErrorDetail[];
-  readonly logLevel: 'warn' | 'error';
+  kind: ErrorKind;
+  code: string;
+  httpStatus: number;
+  message: string;
+  details?: ErrorDetail[];
+  logLevel: 'warn' | 'error';
   /** True when the error was not one we anticipated, which usually means a bug. */
-  readonly unexpected: boolean;
+  unexpected: boolean;
 }
 
 const HTTP_STATUS_BY_KIND: Readonly<Record<ErrorKind, number>> = {
@@ -44,7 +44,7 @@ export function mapError(error: unknown): MappedError {
       code: error.code,
       httpStatus: HTTP_STATUS_BY_KIND[error.kind],
       message: error.message,
-      ...(error.details ? { details: error.details } : {}),
+      details: error.details,
       // A dependency outage is not the caller's fault and needs attention: log it as an error.
       logLevel: error.kind === ErrorKind.UpstreamUnavailable ? 'error' : 'warn',
       unexpected: false,
@@ -82,8 +82,8 @@ export function mapError(error: unknown): MappedError {
 }
 
 /**
- * express.json() throws http-errors shaped objects ({ type, status, expose }).
- * We translate the ones we know into our taxonomy rather than leaking their wording.
+ * express.json() throws its own error objects (with a `type` field) for a bad request body.
+ * We turn the two we know about into our own errors, with our own wording.
  */
 function asBodyParserError(error: unknown): MappedError | undefined {
   if (typeof error !== 'object' || error === null || !('type' in error)) {

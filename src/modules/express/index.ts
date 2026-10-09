@@ -1,4 +1,4 @@
-/** Express helpers: request ids, response envelope, central error handling. */
-export * from './request-id'; // Safe request ids (log-injection proof).
-export * from './respond'; // The REST response envelope.
-export * from './error-handler'; // Central Express error middleware and 404 handler.
+/** Express helpers: request ids, the response format, and central error handling. */
+export * from './request-id'; // a safe id for every request
+export * from './respond'; // the standard { success, data | error, meta } response format
+export * from './error-handler'; // the error middleware and the 404 handler

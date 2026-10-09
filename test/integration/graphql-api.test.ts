@@ -4,7 +4,7 @@ import nock from 'nock';
 import request from 'supertest';
 import { createApp } from '../../src/app';
 import { loadConfig } from '../../src/config/env';
-import { createServices } from '../../src/container';
+import { createServices } from '../../src/create-services';
 import {
   createGraphQLHandler,
   type GraphQLHandler,
@@ -14,7 +14,7 @@ import { loadFixture, type OpenMeteoFixture } from '../support/fixtures';
 import {
   FakeClock,
   InMemoryForecastRepository,
-  InMemoryGeocodeCache,
+  InMemoryGeocodeStore,
 } from '../support/in-memory-repositories';
 
 /**
@@ -150,7 +150,7 @@ async function buildApp(isProduction = false): Promise<TestApp> {
   const { rankingService, forecastService } = createServices(
     config,
     logger,
-    { forecasts, geocodes: new InMemoryGeocodeCache() },
+    { forecasts, geocodes: new InMemoryGeocodeStore() },
     clock,
   );
   const graphql = await createGraphQLHandler({

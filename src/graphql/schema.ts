@@ -1,6 +1,6 @@
 /**
- * Schema-first GraphQL. Descriptions are part of the contract: they show up in Postman's
- * schema explorer and in introspection, so they double as API documentation.
+ * The GraphQL schema: every type and field the API offers. The quoted texts are descriptions;
+ * they show up in Postman's schema explorer, so they double as API documentation.
  */
 export const typeDefs = /* GraphQL */ `
   #graphql

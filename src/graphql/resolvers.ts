@@ -1,14 +1,15 @@
-import type { RankingOutcome } from '../application/ranking-service';
-import type { GeoLocation } from '../domain/types';
+import type { RankingOutcome } from '../services/ranking-service';
+import type { GeoLocation } from '../types';
 import type { GraphQLContext } from './context';
 
 interface RankingInputArgs {
-  readonly input: { readonly city: string; readonly countryCode?: string | null };
+  input: { city: string; countryCode?: string | null };
 }
 
 /**
- * Resolvers stay thin: hand the raw input to the use case (which validates it), and translate
- * the outcome into the schema's shape. No business logic lives here.
+ * Resolvers are the functions GraphQL calls to answer a query. Ours are kept tiny: pass the
+ * input to RankingService (which validates it) and convert the result into the schema's shape.
+ * No business logic lives here, so a REST endpoint could reuse RankingService unchanged.
  */
 export const resolvers = {
   Query: {
@@ -19,6 +20,7 @@ export const resolvers = {
     ) => toGraphQL(await rankingService.rank(input)),
   },
 
+  // RankingResult can be one of three types; this tells GraphQL which one we returned.
   RankingResult: {
     __resolveType: (result: { __typename: string }) => result.__typename,
   },

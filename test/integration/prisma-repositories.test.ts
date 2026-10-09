@@ -1,11 +1,11 @@
 import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 import { MySqlContainer, type StartedMySqlContainer } from '@testcontainers/mysql';
-import type { ForecastSnapshot } from '../../src/application/ports';
-import type { GeoLocation } from '../../src/domain/types';
+import type { ForecastSnapshot } from '../../src/services/interfaces';
+import type { GeoLocation } from '../../src/types';
 import { createDatabase, pingDatabase, type Database } from '../../src/modules/database';
-import { PrismaForecastRepository } from '../../src/infrastructure/repositories/prisma-forecast-repository';
-import { PrismaGeocodeCache } from '../../src/infrastructure/repositories/prisma-geocode-cache';
+import { PrismaForecastRepository } from '../../src/repositories/prisma-forecast-repository';
+import { PrismaGeocodeStore } from '../../src/repositories/prisma-geocode-store';
 import { aDay, aMarineDay, conditions } from '../support/builders';
 
 /**
@@ -112,8 +112,8 @@ describe('PrismaForecastRepository', () => {
   );
 });
 
-describe('PrismaGeocodeCache', () => {
-  const cache = () => new PrismaGeocodeCache(db);
+describe('PrismaGeocodeStore', () => {
+  const cache = () => new PrismaGeocodeStore(db);
   const place = (id: number, name: string, countryCode: string): GeoLocation => ({
     id,
     name,
@@ -127,40 +127,52 @@ describe('PrismaGeocodeCache', () => {
     population: null,
   });
   const fetchedAt = new Date('2026-10-07T09:00:00.000Z');
+  const search = (name: string, countryCode = '') => ({ name, countryCode });
 
   it('returns null for an unknown query', async () => {
-    await expect(cache().get('nowhere|')).resolves.toBeNull();
+    await expect(cache().get(search('nowhere'))).resolves.toBeNull();
   });
 
   it('round-trips candidates, keeping best-first order', async () => {
     const candidates = [place(3, 'Paris', 'FR'), place(1, 'Paris', 'US'), place(2, 'Paris', 'US')];
-    await cache().put('paris|', candidates, fetchedAt);
+    await cache().put(search('paris'), candidates, fetchedAt);
 
-    await expect(cache().get('paris|')).resolves.toEqual({ locations: candidates, fetchedAt });
+    await expect(cache().get(search('paris'))).resolves.toEqual({
+      locations: candidates,
+      fetchedAt,
+    });
+  });
+
+  it('keeps the same name with different country filters apart', async () => {
+    await cache().put(search('paris'), [place(3, 'Paris', 'FR')], fetchedAt);
+    await cache().put(search('paris', 'US'), [place(1, 'Paris', 'US')], fetchedAt);
+
+    expect((await cache().get(search('paris')))?.locations[0]?.countryCode).toBe('FR');
+    expect((await cache().get(search('paris', 'US')))?.locations[0]?.countryCode).toBe('US');
   });
 
   it('stores a negative result ("no such place") as an empty list', async () => {
-    await cache().put('xyzzy|', [], fetchedAt);
+    await cache().put(search('xyzzy'), [], fetchedAt);
 
-    await expect(cache().get('xyzzy|')).resolves.toEqual({ locations: [], fetchedAt });
+    await expect(cache().get(search('xyzzy'))).resolves.toEqual({ locations: [], fetchedAt });
   });
 
   it('stores Unicode names correctly (utf8mb4)', async () => {
     const tokyo = place(10, '東京', 'JP');
     const etienne = place(11, 'Saint-Étienne', 'FR');
-    await cache().put('東京|', [tokyo, etienne], fetchedAt);
+    await cache().put(search('東京'), [tokyo, etienne], fetchedAt);
 
-    expect((await cache().get('東京|'))?.locations.map((l) => l.name)).toEqual([
+    expect((await cache().get(search('東京')))?.locations.map((l) => l.name)).toEqual([
       '東京',
       'Saint-Étienne',
     ]);
   });
 
   it('updates a location that changed upstream', async () => {
-    await cache().put('a|', [place(20, 'Old name', 'FR')], fetchedAt);
-    await cache().put('b|', [place(20, 'New name', 'FR')], fetchedAt);
+    await cache().put(search('a'), [place(20, 'Old name', 'FR')], fetchedAt);
+    await cache().put(search('b'), [place(20, 'New name', 'FR')], fetchedAt);
 
-    expect((await cache().get('a|'))?.locations[0]?.name).toBe('New name');
+    expect((await cache().get(search('a')))?.locations[0]?.name).toBe('New name');
   });
 
   it('treats injection payloads as plain data (parameterised queries), and the schema survives', async () => {
@@ -172,11 +184,11 @@ describe('PrismaGeocodeCache', () => {
     ];
 
     for (const key of payloads) {
-      await cache().put(key, [place(30, key, 'FR')], fetchedAt);
-      expect((await cache().get(key))?.locations[0]?.name).toBe(key);
+      await cache().put(search(key), [place(30, key, 'FR')], fetchedAt);
+      expect((await cache().get(search(key)))?.locations[0]?.name).toBe(key);
     }
 
     expect(await tableCount()).toBe(tablesBefore);
-    await expect(cache().get('paris|')).resolves.not.toBeNull(); // other data untouched
+    await expect(cache().get(search('paris'))).resolves.not.toBeNull(); // other data untouched
   });
 });
