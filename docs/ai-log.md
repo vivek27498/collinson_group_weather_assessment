@@ -1,6 +1,6 @@
 # AI usage log
 
-The brief asks us to use AI and show it. I used Claude Code as a pair programmer: it drafted options
+The brief asks us to use AI and show it. I used an AI coding assistant as a pair programmer: it drafted options
 and code, and I made the calls. This log records where I steered it, and what I accepted or rejected.
 
 ## Session 1: planning (2026-10-05/06)

@@ -18,7 +18,7 @@ Unpolished notes on how the work is going, newest last. Cuts and the reasons for
 ## Resuming on another machine
 
 1. `git pull`
-2. Start Claude Code in the repo and say: "Read docs/plan.md and docs/worklog.md, then continue from the next milestone."
+2. Start the AI coding assistant in the repo and say: "Read docs/plan.md and docs/worklog.md, then continue from the next milestone."
 3. Commit small and often; update this file at the end of each session.
 
 ## 2026-10-06: M1, scaffold + tooling + error handling
