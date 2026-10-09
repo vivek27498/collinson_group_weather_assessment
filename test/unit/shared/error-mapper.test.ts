@@ -2,7 +2,6 @@ import { z } from 'zod';
 import {
   ErrorKind,
   NotFoundError,
-  RateLimitedError,
   ServiceUnavailableError,
   UpstreamUnavailableError,
   ValidationError,
@@ -14,7 +13,6 @@ describe('mapError', () => {
     it.each([
       [new ValidationError('bad city'), ErrorKind.Validation, 'VALIDATION_ERROR', 400, 'warn'],
       [new NotFoundError('no such city'), ErrorKind.NotFound, 'NOT_FOUND', 404, 'warn'],
-      [new RateLimitedError(), ErrorKind.RateLimited, 'RATE_LIMITED', 429, 'warn'],
       [
         new ServiceUnavailableError(),
         ErrorKind.ServiceUnavailable,

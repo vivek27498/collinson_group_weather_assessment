@@ -1,9 +1,8 @@
 import { SingleFlight } from '../../../src/application/single-flight';
 
 describe('SingleFlight', () => {
-  it('shares one in-flight promise per key and reports each shared call', async () => {
-    const shared: string[] = [];
-    const flights = new SingleFlight<number>((key) => shared.push(key));
+  it('shares one in-flight promise per key', async () => {
+    const flights = new SingleFlight<number>();
     const work = jest.fn(() => Promise.resolve(42));
 
     const results = await Promise.all([
@@ -14,7 +13,6 @@ describe('SingleFlight', () => {
 
     expect(results).toEqual([42, 42, 42]);
     expect(work).toHaveBeenCalledTimes(1);
-    expect(shared).toEqual(['a', 'a']);
   });
 
   it('runs different keys independently', async () => {

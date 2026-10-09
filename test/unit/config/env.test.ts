@@ -23,7 +23,6 @@ describe('loadConfig', () => {
         marineUrl: 'https://marine-api.open-meteo.com/v1/marine',
       },
       upstream: { timeoutMs: 6000, maxRetries: 1 },
-      rateLimit: { windowMs: 60_000, max: 60 },
       graphql: { maxDepth: 6, maxRootFields: 3 },
       cache: {
         forecastFreshMs: 3 * 3_600_000,

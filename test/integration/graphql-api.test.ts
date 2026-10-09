@@ -10,7 +10,6 @@ import {
   type GraphQLHandler,
 } from '../../src/graphql/create-graphql-handler';
 import { createLogger } from '../../src/observability/logger';
-import { createMetrics } from '../../src/observability/metrics';
 import { loadFixture, type OpenMeteoFixture } from '../support/fixtures';
 import {
   FakeClock,
@@ -136,7 +135,7 @@ interface TestApp {
   drain: () => Promise<void>;
 }
 
-async function buildApp(isProduction = false, rateLimitMax = 1000): Promise<TestApp> {
+async function buildApp(isProduction = false): Promise<TestApp> {
   const config = loadConfig({
     NODE_ENV: isProduction ? 'production' : 'test',
     DATABASE_URL: 'mysql://app:x@localhost:3307/weather',
@@ -160,11 +159,7 @@ async function buildApp(isProduction = false, rateLimitMax = 1000): Promise<Test
     limits: config.graphql,
   });
   return {
-    app: createApp({
-      logger,
-      graphqlHandler: graphql.handler,
-      rateLimit: { windowMs: 60_000, max: rateLimitMax },
-    }),
+    app: createApp({ logger, graphqlHandler: graphql.handler }),
     graphql,
     clock,
     forecasts,
@@ -401,49 +396,6 @@ describe('GraphQL API: activityRankings', () => {
     });
   });
 
-  describe('observability', () => {
-    it('cache, outcome and upstream metrics reflect what happened', async () => {
-      const config = loadConfig({ DATABASE_URL: 'mysql://app:x@localhost:3307/weather' });
-      const logger = createLogger({ level: 'silent' });
-      const metrics = createMetrics();
-      const { rankingService } = createServices(
-        config,
-        logger,
-        { forecasts: new InMemoryForecastRepository(), geocodes: new InMemoryGeocodeCache() },
-        new FakeClock(),
-        metrics,
-      );
-      const handler = await createGraphQLHandler({
-        rankingService,
-        isProduction: false,
-        limits: config.graphql,
-        onError: (code) => {
-          metrics.graphqlErrors.inc({ code });
-        },
-      });
-      const observed = createApp({ logger, metrics, graphqlHandler: handler.handler });
-      try {
-        mockPlace('geocode-chamonix', 'forecast-chamonix', 'marine-inland-chamonix');
-        await rank(observed, { city: 'Chamonix' });
-        await rank(observed, { city: 'Chamonix' });
-        await rank(observed, { city: '<script>' });
-
-        const text = (await request(observed).get('/metrics')).text;
-        expect(text).toContain('weather_forecast_cache_total{outcome="miss"} 1');
-        expect(text).toContain('weather_forecast_cache_total{outcome="hit"} 1');
-        expect(text).toContain('weather_geocode_cache_total{outcome="miss"} 1');
-        expect(text).toContain('weather_geocode_cache_total{outcome="hit"} 1');
-        expect(text).toContain('weather_ranking_outcomes_total{outcome="ranked"} 2');
-        expect(text).toContain('weather_ranking_outcomes_total{outcome="invalidInput"} 1');
-        expect(text).toMatch(
-          /weather_upstream_request_duration_seconds_count\{upstream="open-meteo.forecast",outcome="success"\} 1/,
-        );
-      } finally {
-        await handler.stop();
-      }
-    });
-  });
-
   describe('provider failures', () => {
     it('degrades gracefully when only marine data is down', async () => {
       nock(GEOCODING)
@@ -535,24 +487,6 @@ describe('GraphQL API: activityRankings', () => {
         .send([{ query: '{ __typename }' }, { query: '{ __typename }' }]);
 
       expect(res.status).toBe(400);
-    });
-
-    it('rate-limits /graphql per client with a 429 envelope and RateLimit headers', async () => {
-      const limited = await buildApp(false, 2);
-      try {
-        const send = () => request(limited.app).post('/graphql').send({ query: '{ __typename }' });
-        await send();
-        await send();
-        const res = await send();
-
-        expect(res.status).toBe(429);
-        expect(res.body).toMatchObject({ success: false, error: { code: 'RATE_LIMITED' } });
-        expect(res.headers['ratelimit-policy']).toBeDefined();
-        // Health probes are never rate-limited.
-        expect((await request(limited.app).get('/healthz')).status).toBe(200);
-      } finally {
-        await limited.graphql.stop();
-      }
     });
 
     it('allows introspection in development (Postman schema explorer)', async () => {

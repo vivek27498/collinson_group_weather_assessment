@@ -30,7 +30,6 @@ const HTTP_STATUS_BY_KIND: Readonly<Record<ErrorKind, number>> = {
   [ErrorKind.Validation]: 400,
   [ErrorKind.NotFound]: 404,
   [ErrorKind.PayloadTooLarge]: 413,
-  [ErrorKind.RateLimited]: 429,
   [ErrorKind.UpstreamUnavailable]: 503,
   [ErrorKind.ServiceUnavailable]: 503,
   [ErrorKind.Internal]: 500,
