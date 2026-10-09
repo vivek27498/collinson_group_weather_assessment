@@ -3,10 +3,11 @@
 # ---- build: compile TypeScript (and generate the Prisma client) with dev dependencies ----
 FROM node:22-alpine AS build
 WORKDIR /app
-COPY package.json package-lock.json ./
-RUN npm ci
-COPY tsconfig.json tsconfig.build.json prisma.config.ts ./
+# The Prisma schema must be present before `npm ci`: its postinstall step generates the Prisma client.
+COPY package.json package-lock.json prisma.config.ts ./
 COPY prisma ./prisma
+RUN npm ci
+COPY tsconfig.json tsconfig.build.json ./
 COPY src ./src
 # "prebuild" runs `prisma generate`, then tsc compiles src (including the generated client).
 RUN npm run build

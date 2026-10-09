@@ -23,7 +23,8 @@
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate deploy",
     "db:migrate:dev": "prisma migrate dev",
-    "prebuild": "prisma generate"
+    "prebuild": "prisma generate",
+    "postinstall": "prisma generate"
   },
   "dependencies": {
     "@apollo/server": "^5.5.1",

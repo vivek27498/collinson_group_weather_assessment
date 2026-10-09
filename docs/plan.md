@@ -1,5 +1,7 @@
 # Weather Activity Ranking Service: Plan
 
+> This is the plan I wrote before building. Some folder names changed later (e.g. `domain/` → `scoring/`); the worklog explains why.
+
 _Status: planning agreed, no code written yet. Next step: milestone 1._
 
 ## Context

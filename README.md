@@ -1,190 +1,209 @@
 # Weather Activity Ranking
 
-A GraphQL service: give it a city or town, and it ranks how good the next 7 days are for **skiing,
-surfing, outdoor sightseeing and indoor sightseeing**, with a reason for every score. Weather comes
-from [Open-Meteo](https://open-meteo.com) and is persisted in MySQL, not fetched on every request.
+Type in a city or town, and this service tells you how good the **next 7 days** look for four activities:
+**skiing, surfing, outdoor sightseeing and indoor sightseeing**. It ranks them, picks the best day for
+each, and explains every score in plain words (e.g. _"Rain on the slopes (-25)"_).
 
-> **How I worked** matters more than this README. Start with [docs/worklog.md](docs/worklog.md)
-> (dated notes, including what broke and why), [docs/ai-log.md](docs/ai-log.md) (where I steered or
-> overruled the AI), [docs/questions-and-assumptions.md](docs/questions-and-assumptions.md) (PM questions
-> and the assumption I committed to) and [docs/decisions/](docs/decisions/) (ADRs).
+Weather comes from the free [Open-Meteo](https://open-meteo.com) API (no API key needed) and is saved in
+MySQL, so we don't call the API on every request.
 
-## Try it
+> **How this was built** (reviewers, start here): [docs/worklog.md](docs/worklog.md) has dated notes,
+> including what broke and why. [docs/ai-log.md](docs/ai-log.md) shows where I steered or overruled the AI.
+> [docs/plan.md](docs/plan.md) is the plan I started with (folder names changed later; the worklog explains
+> why). [docs/questions-and-assumptions.md](docs/questions-and-assumptions.md) lists the questions I'd ask a
+> PM, and [docs/decisions/](docs/decisions/) holds the design decisions (ADRs).
 
-```graphql
-query Rank($input: RankingInput!) {
-  activityRankings(input: $input) {
-    ... on ActivityRankings {
-      location {
-        name
-        country
-      }
-      isStale
-      activities {
-        rank
-        activity
-        weeklyScore
-        weeklyRating
-        bestDay
-        days {
-          date
-          score
-          reasons
-        }
-      }
-    }
-    ... on LocationNotFound {
-      message
-    }
-    ... on InvalidInput {
-      fieldErrors {
-        field
-        message
-      }
-    }
-  }
-}
-```
+---
 
-with variables (the standard way to pass inputs: the query text stays fixed, only the values change):
+## Run it in 3 steps
 
-```json
-{ "input": { "city": "Chamonix" } }
-```
-
-As curl: [docs/manual-testing.md#6-curl-cheat-sheet](docs/manual-testing.md#6-curl-cheat-sheet).
-
-```jsonc
-// abridged
-{
-  "rank": 3,
-  "activity": "SKIING",
-  "weeklyScore": 29.7,
-  "weeklyRating": "POOR",
-  "bestDay": "2026-10-09",
-  "days": [
-    {
-      "date": "2026-10-07",
-      "score": 10,
-      "reasons": ["Thin snow cover (0 cm) (-60)", "Warm, slushy snow (max 7.4°C) (-30)"],
-    },
-  ],
-}
-```
-
-A Postman collection with one folder per use case (22 requests, 58 assertions) is in [postman/](postman/).
-See [docs/manual-testing.md](docs/manual-testing.md), which also shows how to simulate outages.
-
-## Run it
-
-**Everything in Docker** (MySQL → migrations as a DDL user → app as a DML-only user):
+You only need **[Docker Desktop](https://www.docker.com/products/docker-desktop/)** (running) and **git**.
 
 ```bash
-docker compose up -d --build        # http://localhost:4000/graphql
+# 1. Get the code
+git clone https://github.com/vivek27498/collinson_group_weather_assessment.git
+cd collinson_group_weather_assessment
+
+# 2. Start everything (database + app). The first run takes a few minutes to build.
+docker compose up -d --build
+
+# 3. Check it's ready: you should see "status":"ready"
+curl http://localhost:4000/readyz
 ```
 
-**Locally** (Node 22, Docker for MySQL):
+That's it. The API is at **http://localhost:4000/graphql**. No `.env` file or other setup is needed.
+
+What step 2 does for you:
+
+1. starts MySQL;
+2. creates the database users;
+3. creates the tables;
+4. starts the app.
+
+**Stop it:** `docker compose down` (your saved data is kept). **Start fresh:** `docker compose down -v` (deletes the data).
+
+### Try your first request
+
+The easiest way is the **Swagger file**: open [`openapi.yaml`](openapi.yaml) in
+[editor.swagger.io](https://editor.swagger.io) (File → Import file). Pick `POST /graphql` → **Try it out** →
+choose an example from the drop-down → **Execute**. There is one ready-made example per business use case,
+each with a short description.
+
+Or from a terminal (Git Bash / macOS / Linux):
 
 ```bash
-npm ci && cp .env.example .env
-docker compose up -d mysql          # MySQL on :3307 with least-privilege users
-npx prisma migrate deploy           # runs as the migrator user
-npm run dev
+curl -s http://localhost:4000/graphql -H 'Content-Type: application/json' --data '{
+  "query": "query Rank($input: RankingInput!) { activityRankings(input: $input) { ... on ActivityRankings { location { name country } activities { rank activity weeklyRating bestDay } } } }",
+  "variables": { "input": { "city": "Chamonix" } }
+}'
 ```
 
-| Command                                       | What                                                                |
-| --------------------------------------------- | ------------------------------------------------------------------- |
-| `npm test`                                    | Unit + integration (integration needs Docker: Testcontainers MySQL) |
-| `npm run test:cov`                            | All tests with an 85% coverage gate                                 |
-| `npm run lint` / `typecheck` / `format:check` | Static checks                                                       |
-| `npx newman run postman/*.json`               | The Postman collection from the CLI                                 |
+Or with **Postman**: import `postman/weather-activity-ranking.postman_collection.json` and click
+**Run collection** (22 requests with automatic checks). See [docs/manual-testing.md](docs/manual-testing.md).
 
-Endpoints: `POST /graphql`, `GET /healthz` (liveness), `GET /readyz` (DB + draining).
+> The first request for a new city takes 1–3 seconds (it fetches live weather). Asking again is almost
+> instant, because the answer is now saved in MySQL.
 
-## What's in it
+### If something goes wrong
 
-| Business use case                        | How                                                                                                                         |
-| ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| Rank the week, pick the day, explain why | Explainable rule-based scorers (start at 100, named adjustments); weekly score = mean of best 3 days                        |
-| Not possible here                        | Surfing inland is `NOT_APPLICABLE` with a reason, not 0                                                                     |
-| Bad-weather fallback                     | Indoor builds on the outdoor score, so it wins on wet days                                                                  |
-| Ambiguous names ("Paris")                | Resolved location + same-name `alternatives`; `countryCode` disambiguates                                                   |
-| Unknown place / bad input                | `LocationNotFound` / `InvalidInput` union members: data, not errors                                                         |
-| Provider slow or down                    | Cache with stale-while-revalidate; serves `isStale: true` data instead of failing; marine-only outages degrade just surfing |
+| Problem                                    | Fix                                                                                                                |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------ |
+| `port is already allocated` (4000 or 3307) | Another app uses that port. Stop it, or change the left-hand port in `docker-compose.yml` (e.g. `'4001:4000'`).    |
+| `Cannot connect to the Docker daemon`      | Start Docker Desktop and wait until it says "running".                                                             |
+| `/readyz` doesn't answer yet               | Give it 20–30 seconds on the first start; check with `docker compose ps` and `docker compose logs app`.            |
+| Want to see what the app is doing          | `docker compose logs -f app` shows every request, and whether data came from the database or live from Open-Meteo. |
 
-**Architecture.** Hexagonal-lite: pure **scoring** rules, **services** that only talk to interfaces,
-**providers** (Open-Meteo) and **repositories** (MySQL) that implement those interfaces, and a thin
-GraphQL layer. Everything is wired by constructor injection in one place (`create-services.ts`). Patterns used
-where they earn their place: Strategy + Registry (scorers), Decorator (`RetryingJsonClient(AxiosJsonClient)`,
-`DbFirstGeocoder`), Repository, and Zod validation of every Open-Meteo response.
-([ADR-002](docs/decisions/ADR-002-architecture-hexagonal-lite.md))
+---
 
-**Code layout.** Folder names say what they hold:
+## What it does (business use cases)
+
+| #   | The user wants to…                                | What they get                                                                                              |
+| --- | ------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| 1   | **Plan the week:** what's the best activity here? | The 4 activities ranked 1–4, each with a weekly score (0–100) and a label (EXCELLENT / GOOD / FAIR / POOR) |
+| 2   | **Pick the day**                                  | The best day for each activity, plus a score for every day                                                 |
+| 3   | **Understand why**                                | Plain-English reasons for every score, biggest impact first                                                |
+| 4   | **Know what's impossible:** can I surf in Madrid? | `NOT_APPLICABLE` with a reason (no sea nearby), never a misleading 0                                       |
+| 5   | **Have a plan B on rainy days**                   | Indoor sightseeing scores higher the worse it is outside                                                   |
+| 6   | **Get the right place:** which "Paris"?           | The place we picked, plus other places with the same name; add `countryCode` to choose                     |
+| 7   | **Get clear feedback on mistakes**                | "Place not found" or "invalid input" as normal answers, never a crash                                      |
+| 8   | **Get fast, reliable answers**                    | Saved data answers in milliseconds, and still works if Open-Meteo is down                                  |
+
+**How a score works:** every day starts at 100. Rules take points away or add a few, for example:
+
+- wind gusts from 40 to 80 km/h cost skiing up to 40 points;
+- rain costs skiing 25 points;
+- 6+ hours of sunshine gives outdoor sightseeing +5.
+
+The score is kept between 0 and 100. The **weekly score** is the average of the **3 best days**, because you
+only need a few good days to plan a trip. All thresholds live in one file,
+[src/config/scoring.ts](src/config/scoring.ts), so they can be tuned without touching the logic.
+
+**How saved data works:**
+
+- Forecasts are reused for **3 hours**.
+- Between 3 and 24 hours old, they're returned immediately (marked `isStale: true`) while a fresh copy is
+  fetched in the background.
+- Place lookups are kept for **30 days**, and "no such place" for **24 hours**.
+- Nearby places (within about 11 km) share the same saved forecast.
+- If 200 people ask for the same new city at once, Open-Meteo is called only **once**.
+
+---
+
+## What I assumed
+
+These are the important ones. The full list, with reasons, is in [docs/questions-and-assumptions.md](docs/questions-and-assumptions.md).
+
+- **"Paris"** means the top match from Open-Meteo (it ranks bigger places first). The answer always says which place was used.
+- **Skiing** is scored on weather only. Weather can't tell us whether a ski resort exists; low altitude is just a small penalty.
+- **Surfing inland** is "not applicable", not 0: impossible and terrible are different answers.
+- **Indoor sightseeing** is always a decent option (it starts at 70) and gets better when outdoor gets worse.
+- **Days** are the place's own local days, and units are metric (°C, km/h, mm).
+- **Place names** may contain letters in any language, spaces, apostrophes, hyphens and dots. Digits are not allowed.
+- **No login or user accounts:** weather isn't private data.
+- **Open question:** indoor can rate EXCELLENT even in a sunny week. I'd check with the product owner whether that's the message we want.
+
+---
+
+## What I left out, and why
+
+To keep the code small and easy to follow, I **removed** a few things I had built earlier. Their history and
+findings are in the [worklog](docs/worklog.md).
+
+| Removed              | Why it's fine for now                                                                       | Where it would go in production        |
+| -------------------- | ------------------------------------------------------------------------------------------- | -------------------------------------- |
+| Prometheus metrics   | The logs already show cache vs live calls, timings and errors                               | A metrics module, or OpenTelemetry     |
+| Per-IP rate limiting | A limit inside one app instance doesn't hold across several                                 | The API gateway or load balancer       |
+| GitHub Actions (CI)  | The same checks run locally with one command (below)                                        | One workflow file                      |
+| k6 load tests        | They found a real bug (fixed), and showed the database pool size matters (now configurable) | Back in, against a fake weather server |
+
+**Not built on purpose:**
+
+- user accounts and multi-tenancy;
+- a UI;
+- hourly scoring;
+- wind direction and tides for surfing;
+- a list of real ski resorts.
+
+**Known simplifications:**
+
+- daily figures hide what happens within a day;
+- the saved place lookups are never deleted (a cleanup job would be needed at large scale).
+
+**Next steps I'd take:**
+
+1. A small in-memory cache in front of MySQL.
+2. A shared lock so "call Open-Meteo once" also holds across several app instances.
+3. Upgrade the MySQL driver once its open security advisories are fixed (see [ADR-004](docs/decisions/ADR-004-security-baseline.md)).
+
+---
+
+## For developers
+
+### Run the app on your machine (without Docker for the app)
+
+Needs **Node.js 22+** and Docker (for MySQL only).
+
+```bash
+npm ci                         # installs packages and generates the database client
+cp .env.example .env           # PowerShell: Copy-Item .env.example .env
+docker compose up -d mysql     # MySQL on port 3307
+npx prisma migrate deploy      # creates the tables
+npm run dev                    # http://localhost:4000, restarts when you edit code
+```
+
+(If the full Docker stack is already running, stop its app first with `docker compose stop app`: both use port 4000.)
+
+### Checks and tests
+
+```bash
+npm run test:unit      # fast unit tests, no Docker needed
+npm test               # all 338 tests (the integration tests start a throwaway MySQL in Docker)
+npm run lint && npm run typecheck && npm run format:check && npm run build   # what CI would run
+```
+
+### Where things are
 
 ```
 src/
-  index.ts, create-services.ts, app.ts   start-up, wiring, Express app
-  types.ts                         shared data types
-  scoring/                         ranking + scoring helpers (pure functions)
-    scorers/                       one scorer per activity: ski, surf, outdoor, indoor
-  services/                        the use cases, grouped by feature (+ interfaces.ts)
-    ranking/                       RankingService + input validation
-    location/                      DbFirstGeocoder (find a place: database first, then Open-Meteo)
-    forecast/                      ForecastService (weather: saved data first, then Open-Meteo)
-  utils/                           small generic helpers: clock, request deduplicator
-  providers/open-meteo/            Open-Meteo geocoding, forecast and marine clients
-  repositories/                    MySQL storage through Prisma
-  graphql/                         schema, resolvers, Apollo setup
-  config/                          environment variables and scoring thresholds
-  modules/                         reusable code with no weather knowledge:
-                                   http (axios + retries), database (Prisma + pool), logger,
-                                   errors, express helpers, lifecycle (graceful shutdown)
+  index.ts             starts the app (config, database, services, server, shutdown)
+  create-services.ts   creates all services and connects them
+  app.ts               Express: middleware and routes (/graphql, /healthz, /readyz)
+  graphql/             the API schema and resolvers
+  services/            the business flow, grouped by feature: ranking/, location/, forecast/
+  scoring/             the scoring rules (pure functions); scorers/ has one file per activity
+  providers/           calls to Open-Meteo
+  repositories/        reading and writing MySQL (through Prisma)
+  config/              environment variables and scoring thresholds
+  modules/             reusable building blocks: http client, database, logger, errors, shutdown
+  utils/               tiny helpers (clock, "run identical work once")
+prisma/                database schema and migrations
+openapi.yaml           Swagger file: one example per use case
 ```
 
-**Persistence and refresh.** Forecasts are cached per ~11 km grid cell in MySQL. Fresh for 3 h, served
-stale up to 24 h while refreshing in the background, and single-flighted so 200 concurrent requests for a
-new city make **1** upstream call. Geocoding is cached for 30 days, and "not found" for
-1 day. Scores are never stored, so retuning needs no backfill. ([ADR-003](docs/decisions/ADR-003-caching-swr.md))
+**Tech stack:**
 
-**Errors, security, ops.**
+- Node.js 22, TypeScript, Express 5 and Apollo GraphQL;
+- MySQL 8.4 with Prisma;
+- Zod (input checks), pino (logs), Jest (tests).
 
-- One error policy for REST and GraphQL: no stack traces or internals leak.
-- Input is checked against an allow-list, and only parameterised SQL is allowed (enforced by lint).
-- Least-privilege DB users, and GraphQL limits on query depth, root fields and batching.
-- Graceful shutdown, and request-id-correlated JSON logs that say whether data came from the cache or live.
-- Details in [ADR-004](docs/decisions/ADR-004-security-baseline.md) and [ADR-005](docs/decisions/ADR-005-error-and-response-handling.md).
-
-## Assumptions (the important ones)
-
-Full list with reasoning: [docs/questions-and-assumptions.md](docs/questions-and-assumptions.md).
-
-- "Paris" → the top geocoding match (population-ranked); the response says which place was chosen.
-- Weather can't tell us whether a ski resort exists: skiing scores _weather suitability_, using elevation as a soft signal.
-- Days are local calendar days for the place (`timezone=auto`). Units are metric.
-- Scoring thresholds are judgement calls, kept in [src/config/scoring.ts](src/config/scoring.ts) and covered by tests.
-- No auth or multi-tenancy (out of scope; weather isn't tenant data).
-
-## Testing
-
-- **338 tests**, 99% line coverage across the full suite:
-  - Table-driven unit tests for the scoring rules.
-  - Cache behaviour with a fake clock (fresh, stale, expired, stampede, outages).
-  - Recorded real Open-Meteo payloads for the adapters.
-  - GraphQL end-to-end through the real object graph, with `nock`.
-  - Prisma adapters against a **real MySQL 8.4** via Testcontainers.
-- **Bugs found by verifying for real** rather than trusting green unit tests (details in the worklog):
-  - MySQL 8 auth failing on a fresh server.
-  - An upstream timeout tuned below real latency.
-  - Apollo's own signal handlers forcing exit 1 on `docker stop`.
-  - Missing single-flight on geocoding (found by a load test, since removed from the repo).
-
-## Cut, or next
-
-- **Not built, by choice:** multi-tenancy, auth, a UI, hourly scoring, wind direction and tides for surfing, and a ski-resort dataset.
-- **Cut to keep the submission focused:** Prometheus metrics, per-IP rate limiting, the CI workflow and the k6 load tests.
-  The history and findings are in the worklog. Rate limiting belongs at the gateway in production.
-- **Next:**
-  1. An in-process L1 cache in front of MySQL.
-  2. A distributed lock (MySQL `GET_LOCK`/Redis) so single-flight holds across instances.
-  3. Upgrade the `mariadb` connector once the open advisories are fixed (see ADR-004).
-- **Open product question:** indoor sightseeing rates EXCELLENT even in sunny weeks (PM question #13).
+The design decisions are explained in [docs/decisions/](docs/decisions/).

@@ -1,167 +1,70 @@
-# Manual testing with Postman
+# Testing by hand: Postman and failure drills
 
-There's no UI, so Postman is the client. The collection has one request per business use case,
-and each request carries automated assertions, so you can see pass/fail instead of eyeballing JSON.
+The README shows how to start the app and the Swagger file (`openapi.yaml`) has one example per use case.
+This page adds two things: the **Postman collection** (with automatic pass/fail checks) and **how to
+simulate outages** to see the app cope.
 
-## 1. Start the service
-
-```powershell
-npm ci
-Copy-Item .env.example .env      # first time only
-npm run dev                      # http://localhost:4000, pretty logs in this terminal
-```
-
-Slice 1 calls the live Open-Meteo API (no API key needed). MySQL isn't used until slice 3.
-
-## 2. Import the collection
+## 1. Postman collection
 
 Postman → **Import** → `postman/weather-activity-ranking.postman_collection.json`.
-The `baseUrl` collection variable defaults to `http://localhost:4000`.
+The `baseUrl` variable defaults to `http://localhost:4000`.
 
-- **Run everything:** right-click the collection → **Run collection** → **Run**. You should see 36 passing assertions.
-- **Explore one request:** open it, click **Send**, then check the **Test Results** tab. The Chamonix,
-  Biarritz, Madrid and Bergen requests also print a one-line-per-activity summary in the
-  **Postman Console** (View → Show Postman Console).
-- **Schema explorer:** in a GraphQL request's body, Postman fetches the schema by introspection
-  (enabled in development only), so you get autocomplete and the field descriptions.
+- **Run everything:** right-click the collection → **Run collection** → **Run**. Expect **22 requests, 58 passing checks**.
+- **One request:** open it, click **Send**, then look at the **Test Results** tab.
+- **Same run from a terminal:** `npx newman run postman/weather-activity-ranking.postman_collection.json`
 
-From the command line, the same run is: `npx newman run postman/weather-activity-ranking.postman_collection.json`
+| Folder                      | Use case                     | What to look at                                                                        |
+| --------------------------- | ---------------------------- | -------------------------------------------------------------------------------------- |
+| 0. Health                   | Ops                          | The `{ success, data, meta.requestId }` response and the `x-request-id` header         |
+| 1. Plan the week            | Rank, best day, reasons      | `activities[].rank`, `bestDay`, `days[].reasons`; "Summary only" asks for fewer fields |
+| 2. Not applicable vs scored | Surfing inland vs at the sea | Biarritz scores surfing; Madrid returns `NOT_APPLICABLE` with the reason, not 0        |
+| 3. Bad-weather fallback     | Plan B                       | Bergen: indoor beats outdoor on rainy days (live data, so it varies)                   |
+| 4. Unknown place            | Not found                    | `__typename: "LocationNotFound"` comes back as normal data, not an error               |
+| 5. Ambiguous names          | Which "Paris"?               | `location` + `alternatives`; `countryCode` picks Paris, Texas                          |
+| 6. Validation and security  | Bad input                    | Injection attempts → `InvalidInput`; 4 places in one request → 400                     |
+| 7. Saved data               | Speed                        | The second call returns the same `forecastFetchedAt`, much faster                      |
 
-## 3. What each folder demonstrates
+## 2. Simulating outages (run the app with `npm run dev`, see the README)
 
-| Folder                      | Use case                            | What to look at                                                                                       |
-| --------------------------- | ----------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| 0. Health                   | Ops                                 | The `{ success, data, meta.requestId }` envelope and the `x-request-id` header                        |
-| 1. Plan the week            | UC1 rank, UC2 best day, UC3 reasons | `activities[].rank`, `bestDay`, `days[].reasons`. "Summary only" shows that clients pick their fields |
-| 2. Not applicable vs scored | UC4                                 | Biarritz scores surfing; Madrid returns `NOT_APPLICABLE` with the reason, not 0                       |
-| 3. Bad-weather fallback     | UC5                                 | Bergen: indoor beats outdoor on rainy days (live data, so it varies)                                  |
-| 4. Unknown place            | UC7                                 | `__typename: "LocationNotFound"` comes back as **data**, with no `errors` array                       |
-| 5. Errors and protocol      | Robustness                          | Validation errors (400), the 404 envelope, request-id echo, and the CSRF block on simple GETs         |
+Open-Meteo's addresses come from config, so you can point one at a dead port and watch what happens.
+The commands are for PowerShell; in Git Bash use `PORT=4001 OPEN_METEO_FORECAST_URL=... npm run dev`.
 
-## 4. Simulating provider failures (needs a second terminal)
-
-Upstream URLs come from config, so you can point one at a dead port and watch how the service behaves.
-
-**Whole forecast provider down → clean error, with retries visible in the logs:**
+**The weather provider is down → a clean error, with retries visible in the logs:**
 
 ```powershell
 $env:PORT=4001; $env:OPEN_METEO_FORECAST_URL="http://127.0.0.1:9/v1/forecast"; npm run dev
 ```
 
-Then send any ranking request to `http://localhost:4001/graphql` (change `baseUrl`). Expected:
+Query a city you haven't queried before on `http://localhost:4001/graphql`. Expected:
 
-- Response: `errors[0].extensions.code = "UPSTREAM_UNAVAILABLE"` and the message
-  _"The weather provider is temporarily unavailable"_, with no hostnames or stack traces.
-- Server log: two `Upstream call failed, retrying` warnings with jittered `delayMs`, then one
-  `GraphQL operation failed` error that has the full cause and the request id.
+- Response: `errors[0].extensions.code = "UPSTREAM_UNAVAILABLE"`, message _"The weather provider is
+  temporarily unavailable"_, with no hostnames or stack traces.
+- Logs: an `Upstream call failed, retrying` warning, then one `GraphQL operation failed` error with the
+  full cause and the request id.
 
-**Only the marine API down → graceful degradation:**
+**Only the sea forecast is down → only surfing is affected:**
 
 ```powershell
 $env:PORT=4001; $env:OPEN_METEO_MARINE_URL="http://127.0.0.1:9/v1/marine"; npm run dev
 ```
 
-Query Biarritz. Expected: the other three activities are ranked as normal, surfing is not applicable,
-and `warnings` contains _"Sea-state data is temporarily unavailable, so surfing could not be scored."_
+Query a coastal city you haven't queried before. Expected: the other three activities are ranked as normal,
+surfing is not applicable, and `warnings` contains _"Sea-state data is temporarily unavailable, so surfing
+could not be scored."_
 
-(Remove the variables afterwards with `Remove-Item Env:PORT, Env:OPEN_METEO_FORECAST_URL, Env:OPEN_METEO_MARINE_URL`.)
+**Older saved data is served while refreshing:** start with `$env:FORECAST_FRESH_MINUTES=1; npm run dev`,
+query a city, wait just over a minute, and query again. The answer comes back instantly with
+`isStale: true`, and the log shows a background refresh. Query once more: `isStale` is false again.
 
-**Stale-while-revalidate:** start with `$env:FORECAST_FRESH_MINUTES=1; npm run dev`, query a city,
-wait just over a minute, and query again. The response comes back instantly with `isStale: true`,
-and the log shows a background refresh. Query once more and `isStale` is false with a newer `forecastFetchedAt`.
+**Provider down, but data is saved:** query a city, restart with `FORECAST_FRESH_MINUTES=1` and a dead
+`OPEN_METEO_FORECAST_URL` (see above), wait a minute, and query again. You still get rankings
+(`isStale: true`) instead of an error.
 
-**Outage with cached data:** query a city, restart with `FORECAST_FRESH_MINUTES=1` and a dead
-`OPEN_METEO_FORECAST_URL` (see above), wait a minute, and query again. You still get rankings,
-with `isStale: true`, instead of an error.
+Afterwards: `Remove-Item Env:PORT, Env:OPEN_METEO_FORECAST_URL, Env:OPEN_METEO_MARINE_URL, Env:FORECAST_FRESH_MINUTES`.
 
-**Inspect the cache:**
-`docker compose exec mysql mysql -uapp -papp_dev_password weather -e "SELECT grid_key, marine_status, fetched_at FROM forecast_snapshots"`
-
-## 5. Running the whole stack in Docker
-
-```powershell
-docker compose up -d --build     # MySQL -> migrate (as migrator) -> app (as app user)
-```
-
-The service is then on http://localhost:4000, and the same Postman collection works against it.
-
-## 6. curl cheat sheet
-
-All requests use the standard GraphQL-over-HTTP body `{ "query", "variables" }`. The query text stays fixed and
-only the `variables` change, so no quotes need escaping inside the query. Run them in Git Bash with
-the server on `localhost:4000`. Append `| python -m json.tool` to pretty-print.
-
-**Health**
+## 3. Looking inside the database
 
 ```bash
-curl -s localhost:4000/healthz
-curl -s localhost:4000/readyz
-```
-
-**UC1-3: rank the week, best day, reasons**
-
-```bash
-curl -s localhost:4000/graphql -H 'Content-Type: application/json' --data '{
-  "query": "query Rank($input: RankingInput!) { activityRankings(input: $input) { __typename ... on ActivityRankings { location { name country } forecastFetchedAt isStale warnings activities { rank activity weeklyScore weeklyRating bestDay days { date score rating reasons } } } } }",
-  "variables": { "input": { "city": "Chamonix" } }
-}'
-```
-
-**UC4: surfing scored on the coast vs not applicable inland** (same query; change only the variables)
-
-```bash
-curl -s localhost:4000/graphql -H 'Content-Type: application/json' --data '{
-  "query": "query Rank($input: RankingInput!) { activityRankings(input: $input) { ... on ActivityRankings { location { name country } activities { rank activity weeklyScore weeklyRating applicable } } } }",
-  "variables": { "input": { "city": "Biarritz" } }
-}'
-# then: "variables": { "input": { "city": "Madrid" } }
-```
-
-**UC5: rainy city, so indoor should rank high**
-
-```bash
-curl -s localhost:4000/graphql -H 'Content-Type: application/json' --data '{
-  "query": "query Rank($input: RankingInput!) { activityRankings(input: $input) { ... on ActivityRankings { activities { rank activity weeklyScore weeklyRating } } } }",
-  "variables": { "input": { "city": "Bergen", "countryCode": "NO" } }
-}'
-```
-
-**UC6: ambiguous names (which Paris?)**
-
-```bash
-curl -s localhost:4000/graphql -H 'Content-Type: application/json' --data '{
-  "query": "query Rank($input: RankingInput!) { activityRankings(input: $input) { ... on ActivityRankings { location { name region country countryCode } alternatives { name region country countryCode } } } }",
-  "variables": { "input": { "city": "Paris" } }
-}'
-# then pick another one: "variables": { "input": { "city": "Paris", "countryCode": "US" } }
-```
-
-**UC7: unknown place, returned as data, not an error**
-
-```bash
-curl -s localhost:4000/graphql -H 'Content-Type: application/json' --data '{
-  "query": "query Rank($input: RankingInput!) { activityRankings(input: $input) { __typename ... on LocationNotFound { message query } } }",
-  "variables": { "input": { "city": "Xyzzyqwv" } }
-}'
-```
-
-**Validation and injection: rejected before anything is looked up**
-
-```bash
-curl -s localhost:4000/graphql -H 'Content-Type: application/json' --data '{
-  "query": "query Rank($input: RankingInput!) { activityRankings(input: $input) { __typename ... on InvalidInput { message fieldErrors { field message } } } }",
-  "variables": { "input": { "city": "Paris'"'"' OR 1=1", "countryCode": "FRA" } }
-}'
-```
-
-**UC8: caching. Watch the time and the `source` field in the server log**
-
-```bash
-for i in 1 2; do
-  curl -s -o /dev/null -w "call $i: %{time_total}s\n" localhost:4000/graphql \
-    -H 'Content-Type: application/json' -H "x-request-id: cache-demo-$i" --data '{
-    "query": "query Rank($input: RankingInput!) { activityRankings(input: $input) { __typename } }",
-    "variables": { "input": { "city": "Vienna" } }
-  }'
-done
+docker compose exec mysql mysql -uapp -papp_dev_password weather -e "SELECT name, country_code, fetched_at FROM geocode_queries"
+docker compose exec mysql mysql -uapp -papp_dev_password weather -e "SELECT grid_key, marine_status, fetched_at FROM forecast_snapshots"
 ```

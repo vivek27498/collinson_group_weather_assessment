@@ -1,0 +1,566 @@
+openapi: 3.0.3
+info:
+  title: Weather Activity Ranking API
+  version: 1.0.0
+  license:
+    name: MIT
+  description: |
+    Give the API a city or town; it ranks the **next 7 days** for **skiing, surfing, outdoor sightseeing
+    and indoor sightseeing**, picks the best day for each, and explains every score.
+
+    ### How to use this file
+    1. Start the app (see the README: `docker compose up -d --build`).
+    2. Open this file in https://editor.swagger.io (File → Import file) or a Swagger/OpenAPI extension
+       in VS Code.
+    3. Pick an operation → **Try it out** → choose an example from the drop-down → **Execute**.
+
+    ### Why there is only one main endpoint
+    The API is **GraphQL**: every question goes to `POST /graphql`. The request body holds
+    - `query`: the question, written once (it also says which fields you want back);
+    - `variables`: the values that change, e.g. `{ "input": { "city": "Chamonix" } }`.
+
+    Each example below is one **business use case**, with a description of what it shows.
+
+    ### How to read the answer
+    `data.activityRankings.__typename` tells you which kind of answer you got:
+    - `ActivityRankings`: success (ranked activities, best days, reasons);
+    - `LocationNotFound`: no such place (a normal answer, not an error);
+    - `InvalidInput`: the input isn't a plausible place name or country code (nothing was looked up).
+
+    Real failures (e.g. the weather provider is down and nothing is saved) come back in an `errors` array.
+# No login or API key: the API is public (rate limiting would sit at a gateway in production).
+security: []
+servers:
+  - url: http://localhost:4000
+    description: Local (Docker or npm run dev)
+tags:
+  - name: Rankings
+    description: The main API (GraphQL), one example per business use case.
+  - name: Health
+    description: Checks used by Docker / Kubernetes / load balancers.
+
+paths:
+  /graphql:
+    post:
+      tags: [Rankings]
+      summary: Rank the next 7 days of activities for a place
+      description: |
+        Choose an example from the **Examples** drop-down. They all use the same query; only the
+        `variables` change, exactly as a real front end would do it.
+
+        Weather data is saved in MySQL: the first request for a place takes 1–3 s (live from
+        Open-Meteo); repeats within 3 hours take about 20 ms.
+      operationId: rankActivities
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GraphQLRequest'
+            examples:
+              planTheWeek:
+                summary: '1. Plan the week, pick the day, see why (Chamonix)'
+                description: |
+                  **Use cases 1–3.** All 4 activities ranked for the week (`rank` 1–4), a weekly score and
+                  label, the `bestDay` per activity, and a score + plain-English `reasons` for every day.
+                  Chamonix is inland, so surfing also shows use case 4 (not applicable).
+                value:
+                  query: &rankQuery 'query Rank($input: RankingInput!) { activityRankings(input: $input) { __typename ... on ActivityRankings { location { name region country countryCode } alternatives { name region country countryCode } forecastFetchedAt isStale warnings activities { rank activity weeklyScore weeklyRating applicable bestDay days { date score rating reasons } } } ... on LocationNotFound { message query } ... on InvalidInput { message fieldErrors { field message } } } }'
+                  variables: { input: { city: Chamonix } }
+              summaryOnly:
+                summary: '1b. Just a summary (ask for fewer fields)'
+                description: |
+                  GraphQL lets the caller ask only for what it needs. Here: just the ranking and best day,
+                  no daily details. Same endpoint, smaller answer.
+                value:
+                  query: 'query Rank($input: RankingInput!) { activityRankings(input: $input) { ... on ActivityRankings { location { name country } activities { rank activity weeklyRating bestDay } } } }'
+                  variables: { input: { city: Chamonix } }
+              surfTown:
+                summary: '2. Surfing scored at the coast (Biarritz)'
+                description: |
+                  **Use case 4 (the other side).** By the sea, surfing gets a real score from wave height,
+                  wave period and wind. Sweet spot: 1–2.5 m waves.
+                value:
+                  query: *rankQuery
+                  variables: { input: { city: Biarritz } }
+              notPossibleHere:
+                summary: '3. Surfing is impossible inland (Madrid)'
+                description: |
+                  **Use case 4.** No sea data, so surfing is `NOT_APPLICABLE` with the reason
+                  "No sea-state data for this location (likely inland)", and ranked last. It is NOT given
+                  a score of 0: "impossible" and "terrible" are different answers.
+                value:
+                  query: *rankQuery
+                  variables: { input: { city: Madrid } }
+              rainyCity:
+                summary: '4. Plan B on rainy days (Bergen)'
+                description: |
+                  **Use case 5.** Indoor sightseeing starts at 70 and gains 30% of the points outdoor loses,
+                  so on wet days it rises to the top. Live data: exact results depend on the real forecast.
+                value:
+                  query: *rankQuery
+                  variables: { input: { city: Bergen } }
+              ambiguousName:
+                summary: '5. Ambiguous name (Paris) → best match + alternatives'
+                description: |
+                  **Use case 6.** We use the best match (Paris, France) and say so in `location`, and list
+                  other places with exactly the same name in `alternatives` (Paris, Texas; Paris, Tennessee …).
+                value:
+                  query: *rankQuery
+                  variables: { input: { city: Paris } }
+              pickTheCountry:
+                summary: '6. Pick the right one with countryCode (Paris, US)'
+                description: |
+                  **Use case 6.** Add a 2-letter country code to search only in that country
+                  (upper or lower case both work).
+                value:
+                  query: *rankQuery
+                  variables: { input: { city: Paris, countryCode: us } }
+              unknownPlace:
+                summary: '7. Unknown place → LocationNotFound'
+                description: |
+                  **Use case 7.** A valid-looking name that matches nothing. This is a normal answer
+                  (`__typename: LocationNotFound`), not an error. "Not found" is remembered for 24 hours.
+                value:
+                  query: *rankQuery
+                  variables: { input: { city: Xyzzyville } }
+              emptyCity:
+                summary: '8. Empty city → InvalidInput'
+                description: '**Use case 7.** Checked before anything is looked up: "City is required".'
+                value:
+                  query: *rankQuery
+                  variables: { input: { city: '' } }
+              badCountryCode:
+                summary: '9. Bad country code → InvalidInput'
+                description: '**Use case 7.** Country codes must be exactly 2 letters ("FR", not "FRA").'
+                value:
+                  query: *rankQuery
+                  variables: { input: { city: Paris, countryCode: FRA } }
+              sqlInjection:
+                summary: '10. Security: SQL injection attempt → InvalidInput'
+                description: |
+                  Only letters, spaces, apostrophes, hyphens and dots are allowed in a place name, so this
+                  is rejected before it reaches Open-Meteo, the database or the logs.
+                value:
+                  query: *rankQuery
+                  variables: { input: { city: "'; DROP TABLE locations;--" } }
+              scriptInjection:
+                summary: '11. Security: HTML/script in the city → InvalidInput'
+                description: Same rule as above; markup is never accepted.
+                value:
+                  query: *rankQuery
+                  variables: { input: { city: '<script>alert(1)</script>' } }
+              tooManyPlaces:
+                summary: '12. Security: too many places in one request → 400'
+                description: |
+                  One request asking for 4 places (using aliases a, b, c, d) would multiply the calls to
+                  Open-Meteo, so it is rejected before anything runs (maximum 3).
+                value:
+                  query: '{ a: activityRankings(input: {city: "Paris"}) { __typename } b: activityRankings(input: {city: "Rome"}) { __typename } c: activityRankings(input: {city: "Oslo"}) { __typename } d: activityRankings(input: {city: "Nice"}) { __typename } }'
+              savedData:
+                summary: '13. Fast repeat answers from saved data (run twice)'
+                description: |
+                  **Use case 8.** Run this twice. The first call may take 1–3 s (fetched live from
+                  Open-Meteo and saved); the second takes about 20 ms (served from MySQL), with the same
+                  `forecastFetchedAt`. `isStale: true` would mean "older than 3 h, refreshing in the
+                  background". The app logs show `source: "open-meteo"` then `source: "cache"`.
+                value:
+                  query: 'query Rank($input: RankingInput!) { activityRankings(input: $input) { ... on ActivityRankings { location { name } forecastFetchedAt isStale warnings } } }'
+                  variables: { input: { city: Lisbon } }
+      responses:
+        '200':
+          description: |
+            A GraphQL answer. Check `data.activityRankings.__typename` to see which kind it is. If a real
+            failure happened (weather provider down and nothing saved), `data` is null and `errors` explains it.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GraphQLResponse'
+              examples:
+                ranked:
+                  summary: Success (ActivityRankings), shortened to 2 days per activity
+                  value:
+                    data:
+                      activityRankings:
+                        __typename: ActivityRankings
+                        location:
+                          { name: Chamonix, region: Rhône-Alpes, country: France, countryCode: FR }
+                        alternatives: []
+                        forecastFetchedAt: '2026-10-09T11:41:43.222Z'
+                        isStale: false
+                        warnings: []
+                        activities:
+                          - rank: 1
+                            activity: OUTDOOR_SIGHTSEEING
+                            weeklyScore: 85
+                            weeklyRating: EXCELLENT
+                            applicable: true
+                            bestDay: '2026-10-13'
+                            days:
+                              - date: '2026-10-09'
+                                score: 66
+                                rating: GOOD
+                                reasons:
+                                  [
+                                    'Cold (max 4°C) (-29)',
+                                    'Fog limits views (-10)',
+                                    'Sunny (7 h sunshine) (+5)',
+                                  ]
+                              - date: '2026-10-10'
+                                score: 12
+                                rating: POOR
+                                reasons:
+                                  [
+                                    'Cold (max 2.7°C) (-33)',
+                                    'Rain 5.3 mm (-20)',
+                                    '100% chance of rain (-20)',
+                                    'Snowfall (-15)',
+                                  ]
+                          - rank: 2
+                            activity: INDOOR_SIGHTSEEING
+                            weeklyScore: 84.3
+                            weeklyRating: EXCELLENT
+                            applicable: true
+                            bestDay: '2026-10-10'
+                            days:
+                              - date: '2026-10-10'
+                                score: 96
+                                rating: EXCELLENT
+                                reasons: ['Poor outdoor conditions (outdoor score 12) (+26)']
+                          - rank: 3
+                            activity: SKIING
+                            weeklyScore: 25.7
+                            weeklyRating: POOR
+                            applicable: true
+                            bestDay: '2026-10-10'
+                            days:
+                              - date: '2026-10-09'
+                                score: 23
+                                rating: POOR
+                                reasons:
+                                  [
+                                    'Thin snow cover (1 cm) (-59)',
+                                    'Fog / poor visibility (-10)',
+                                    'Warm, slushy snow (max 4°C) (-8)',
+                                  ]
+                          - rank: 4
+                            activity: SURFING
+                            weeklyScore: null
+                            weeklyRating: NOT_APPLICABLE
+                            applicable: false
+                            bestDay: null
+                            days:
+                              - date: '2026-10-09'
+                                score: null
+                                rating: NOT_APPLICABLE
+                                reasons: ['No sea-state data for this location (likely inland)']
+                notFound:
+                  summary: Unknown place (LocationNotFound)
+                  value:
+                    data:
+                      activityRankings:
+                        __typename: LocationNotFound
+                        message: 'No place found matching "Xyzzyville"'
+                        query: Xyzzyville
+                invalidInput:
+                  summary: Invalid input (InvalidInput)
+                  value:
+                    data:
+                      activityRankings:
+                        __typename: InvalidInput
+                        message: The input is not valid. Nothing was looked up.
+                        fieldErrors:
+                          - field: city
+                            message: City may only contain letters, spaces, apostrophes, hyphens and dots
+                providerDown:
+                  summary: Weather provider down and nothing saved (a real failure)
+                  value:
+                    data: null
+                    errors:
+                      - message: The weather provider is temporarily unavailable
+                        path: [activityRankings]
+                        extensions: { code: UPSTREAM_UNAVAILABLE }
+        '400':
+          description: The query itself was rejected before running (unknown field, bad syntax, too many places).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GraphQLResponse'
+              examples:
+                tooManyPlaces:
+                  summary: Too many places in one request
+                  value:
+                    errors:
+                      - message: 'Too many root fields: 4 (max 3). Split the request or ask for fewer places.'
+                        extensions: { code: GRAPHQL_VALIDATION_FAILED }
+                unknownField:
+                  summary: Asked for a field that doesn't exist
+                  value:
+                    errors:
+                      - message: Cannot query field "nope" on type "ActivityRankings".
+                        extensions: { code: GRAPHQL_VALIDATION_FAILED }
+        '413':
+          description: Request body larger than 10 kb.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestError'
+
+  /healthz:
+    get:
+      tags: [Health]
+      summary: Liveness - is the process running?
+      description: |
+        Always 200 while the process is up. It deliberately does NOT check the database, so a database
+        outage never makes Docker/Kubernetes restart the app in a loop.
+      operationId: liveness
+      responses:
+        '200':
+          description: The process is running.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestSuccess'
+              example:
+                success: true
+                data: { status: ok }
+                meta:
+                  {
+                    requestId: 5fa339ed-95b9-4aea-a922-550227c611b3,
+                    timestamp: '2026-10-09T13:52:20.101Z',
+                  }
+
+  /readyz:
+    get:
+      tags: [Health]
+      summary: Readiness - should this server get traffic?
+      description: |
+        200 when the database answers. 503 while shutting down (`SHUTTING_DOWN`) or when the database
+        can't be reached (`DEPENDENCY_UNAVAILABLE`); a load balancer then sends traffic elsewhere.
+      operationId: readiness
+      responses:
+        '200':
+          description: Ready for traffic.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestSuccess'
+              example:
+                success: true
+                data: { status: ready }
+                meta:
+                  {
+                    requestId: 5fa339ed-95b9-4aea-a922-550227c611b3,
+                    timestamp: '2026-10-09T13:52:20.101Z',
+                  }
+        '503':
+          description: Not ready (shutting down, or database unreachable).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestError'
+              examples:
+                shuttingDown:
+                  value:
+                    success: false
+                    error: { code: SHUTTING_DOWN, message: Shutting down }
+                    meta: { requestId: 1b6c…, timestamp: '2026-10-09T13:52:20.101Z' }
+                databaseDown:
+                  value:
+                    success: false
+                    error: { code: DEPENDENCY_UNAVAILABLE, message: A dependency is unavailable }
+                    meta: { requestId: 1b6c…, timestamp: '2026-10-09T13:52:20.101Z' }
+
+components:
+  schemas:
+    GraphQLRequest:
+      type: object
+      required: [query]
+      properties:
+        query:
+          type: string
+          description: The GraphQL query. It also lists which fields you want back.
+        variables:
+          type: object
+          description: The values for the query.
+          properties:
+            input:
+              $ref: '#/components/schemas/RankingInput'
+
+    RankingInput:
+      type: object
+      required: [city]
+      properties:
+        city:
+          type: string
+          maxLength: 100
+          description: |
+            City or town name. Letters in any language, spaces, apostrophes, hyphens and dots
+            ("Saint-Étienne", "L'Aquila", "東京"). Digits and symbols are rejected.
+          example: Chamonix
+        countryCode:
+          type: string
+          nullable: true
+          description: Optional 2-letter country code to choose between places with the same name.
+          example: US
+
+    GraphQLResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          nullable: true
+          properties:
+            activityRankings:
+              oneOf:
+                - $ref: '#/components/schemas/ActivityRankings'
+                - $ref: '#/components/schemas/LocationNotFound'
+                - $ref: '#/components/schemas/InvalidInput'
+        errors:
+          type: array
+          description: Only present when something really failed, or the query was rejected.
+          items:
+            type: object
+            properties:
+              message: { type: string }
+              path: { type: array, items: { type: string } }
+              extensions:
+                type: object
+                properties:
+                  code:
+                    type: string
+                    example: UPSTREAM_UNAVAILABLE
+
+    ActivityRankings:
+      type: object
+      description: Success. Activities are ordered best first.
+      properties:
+        __typename: { type: string, enum: [ActivityRankings] }
+        location:
+          $ref: '#/components/schemas/Location'
+        alternatives:
+          type: array
+          description: Up to 5 other places with exactly the same name (e.g. Paris, Texas).
+          items: { $ref: '#/components/schemas/Location' }
+        forecastFetchedAt:
+          type: string
+          format: date-time
+          description: When the weather data was fetched from Open-Meteo.
+        isStale:
+          type: boolean
+          description: True when the saved data is 3–24 h old (a fresh copy is being fetched in the background).
+        warnings:
+          type: array
+          items: { type: string }
+          description: Problems that didn't stop the answer, e.g. sea data temporarily unavailable.
+        activities:
+          type: array
+          items: { $ref: '#/components/schemas/ActivityRanking' }
+
+    Location:
+      type: object
+      properties:
+        name: { type: string, example: Paris }
+        region: { type: string, nullable: true, example: Île-de-France }
+        country: { type: string, nullable: true, example: France }
+        countryCode: { type: string, nullable: true, example: FR }
+        latitude: { type: number }
+        longitude: { type: number }
+        elevation: { type: number, nullable: true, description: Metres above sea level. }
+        timezone:
+          { type: string, nullable: true, description: All dates are local days in this time zone. }
+
+    ActivityRanking:
+      type: object
+      properties:
+        activity: { $ref: '#/components/schemas/Activity' }
+        rank: { type: integer, description: 1 = best activity this week. }
+        weeklyScore:
+          type: number
+          nullable: true
+          description: Average of the best 3 days (0–100), or null if the activity isn't possible here.
+        weeklyRating: { $ref: '#/components/schemas/Rating' }
+        applicable:
+          {
+            type: boolean,
+            description: False when the activity is impossible here (e.g. surfing inland).,
+          }
+        bestDay:
+          {
+            type: string,
+            format: date,
+            nullable: true,
+            description: Highest-scoring day; ties go to the earlier day.,
+          }
+        days:
+          type: array
+          items: { $ref: '#/components/schemas/DayScore' }
+
+    DayScore:
+      type: object
+      properties:
+        date: { type: string, format: date }
+        score:
+          { type: integer, nullable: true, description: '0–100, or null if not possible here.' }
+        rating: { $ref: '#/components/schemas/Rating' }
+        reasons:
+          type: array
+          items: { type: string }
+          description: Why the score is what it is, biggest impact first, e.g. "Rain on the slopes (-25)".
+
+    LocationNotFound:
+      type: object
+      properties:
+        __typename: { type: string, enum: [LocationNotFound] }
+        message: { type: string }
+        query: { type: string }
+
+    InvalidInput:
+      type: object
+      properties:
+        __typename: { type: string, enum: [InvalidInput] }
+        message: { type: string }
+        fieldErrors:
+          type: array
+          items:
+            type: object
+            properties:
+              field: { type: string, example: city }
+              message: { type: string, example: City is required }
+
+    Activity:
+      type: string
+      enum: [SKIING, SURFING, OUTDOOR_SIGHTSEEING, INDOOR_SIGHTSEEING]
+
+    Rating:
+      type: string
+      description: 75–100 EXCELLENT, 55–74 GOOD, 35–54 FAIR, 0–34 POOR; NOT_APPLICABLE when impossible here.
+      enum: [EXCELLENT, GOOD, FAIR, POOR, NOT_APPLICABLE]
+
+    RestSuccess:
+      type: object
+      properties:
+        success: { type: boolean, example: true }
+        data: { type: object }
+        meta: { $ref: '#/components/schemas/Meta' }
+
+    RestError:
+      type: object
+      properties:
+        success: { type: boolean, example: false }
+        error:
+          type: object
+          properties:
+            code: { type: string }
+            message: { type: string }
+        meta: { $ref: '#/components/schemas/Meta' }
+
+    Meta:
+      type: object
+      properties:
+        requestId:
+          {
+            type: string,
+            description: Quote this when reporting a problem; it appears in every log line.,
+          }
+        timestamp: { type: string, format: date-time }
