@@ -11,6 +11,7 @@ const envSchema = z.object({
   DATABASE_URL: z
     .url()
     .refine((url) => url.startsWith('mysql://'), 'DATABASE_URL must be a mysql:// URL'),
+  DB_POOL_SIZE: z.coerce.number().int().min(1).max(100).default(10),
 
   // Upstream hosts come from config, never from user input (no SSRF). Overridable so load
   // tests can point at a mock instead of hammering the real (free, rate-limited) API.
@@ -43,6 +44,7 @@ export interface AppConfig {
   readonly port: number;
   readonly logLevel: Env['LOG_LEVEL'];
   readonly databaseUrl: string;
+  readonly databasePoolSize: number;
   readonly openMeteo: {
     readonly geocodingUrl: string;
     readonly forecastUrl: string;
@@ -84,6 +86,7 @@ export function loadConfig(source: Record<string, string | undefined> = process.
     port: env.PORT,
     logLevel: env.LOG_LEVEL,
     databaseUrl: env.DATABASE_URL,
+    databasePoolSize: env.DB_POOL_SIZE,
     openMeteo: {
       geocodingUrl: env.OPEN_METEO_GEOCODING_URL,
       forecastUrl: env.OPEN_METEO_FORECAST_URL,

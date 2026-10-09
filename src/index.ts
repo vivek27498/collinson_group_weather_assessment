@@ -16,7 +16,7 @@ async function main(): Promise<void> {
   const config = loadConfig();
   const logger = createLogger({ level: config.logLevel, pretty: config.env === 'development' });
 
-  const db = createDatabase(config.databaseUrl);
+  const db = createDatabase(config.databaseUrl, { poolSize: config.databasePoolSize });
   const { rankingService, forecastService } = createServices(config, logger, {
     forecasts: new PrismaForecastRepository(db),
     geocodes: new PrismaGeocodeCache(db),
