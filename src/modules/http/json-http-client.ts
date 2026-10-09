@@ -1,4 +1,4 @@
-import { UpstreamUnavailableError } from '../../shared/errors/app-error';
+import { UpstreamUnavailableError } from '../errors';
 
 /** Minimal port for "GET this URL and give me parsed JSON". Adapters depend on this, not on fetch. */
 export interface JsonHttpClient {

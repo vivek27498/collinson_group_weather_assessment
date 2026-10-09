@@ -5,8 +5,9 @@ import {
   ServiceUnavailableError,
   UpstreamUnavailableError,
   ValidationError,
-} from '../../../src/shared/errors/app-error';
-import { GENERIC_INTERNAL_MESSAGE, mapError } from '../../../src/shared/errors/error-mapper';
+  GENERIC_INTERNAL_MESSAGE,
+  mapError,
+} from '../../../../src/modules/errors';
 
 describe('mapError', () => {
   describe('AppError subclasses (expected errors)', () => {

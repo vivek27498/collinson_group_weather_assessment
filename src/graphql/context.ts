@@ -1,5 +1,5 @@
 import type { RankingService } from '../application/ranking-service';
-import type { Logger } from '../observability/logger';
+import type { Logger } from '../modules/logger';
 
 /** Per-request context. Built fresh for every operation, so nothing leaks between requests. */
 export interface GraphQLContext {

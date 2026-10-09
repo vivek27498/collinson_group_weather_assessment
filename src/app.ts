@@ -1,12 +1,9 @@
 import express, { type Express, type RequestHandler } from 'express';
 import helmet from 'helmet';
 import { pinoHttp } from 'pino-http';
-import type { Logger } from './observability/logger';
-import { requestContextMiddleware } from './observability/request-context';
-import { ServiceUnavailableError } from './shared/errors/app-error';
-import { errorHandler, notFoundHandler } from './shared/http/error-handler';
-import { genReqId } from './shared/http/request-id';
-import { sendSuccess } from './shared/http/respond';
+import { type Logger, requestContextMiddleware } from './modules/logger';
+import { ServiceUnavailableError } from './modules/errors';
+import { errorHandler, notFoundHandler, genReqId, sendSuccess } from './modules/express';
 
 export interface AppDependencies {
   readonly logger: Logger;

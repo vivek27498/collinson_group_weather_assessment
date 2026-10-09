@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { UpstreamRequestError } from '../http/json-http-client';
+import { UpstreamRequestError } from '../../modules/http';
 
 /**
  * Never trust a third-party payload's shape. If Open-Meteo changes its contract we want a

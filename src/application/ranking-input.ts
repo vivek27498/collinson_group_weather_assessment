@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { ErrorDetail } from '../shared/errors/app-error';
+import type { ErrorDetail } from '../modules/errors';
 import type { LocationQuery } from './ports';
 
 /**

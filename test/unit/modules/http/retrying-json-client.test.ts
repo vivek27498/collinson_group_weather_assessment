@@ -1,8 +1,8 @@
 import {
   UpstreamRequestError,
   type JsonHttpClient,
-} from '../../../src/infrastructure/http/json-http-client';
-import { RetryingJsonClient } from '../../../src/infrastructure/http/retrying-json-client';
+  RetryingJsonClient,
+} from '../../../../src/modules/http';
 
 const url = new URL('https://api.example.test/v1/x');
 const ctx = { upstream: 'test.upstream' };

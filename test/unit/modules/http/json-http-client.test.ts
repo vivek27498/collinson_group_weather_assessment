@@ -2,8 +2,8 @@ import {
   FetchJsonClient,
   isRetryableStatus,
   UpstreamRequestError,
-} from '../../../src/infrastructure/http/json-http-client';
-import { UpstreamUnavailableError } from '../../../src/shared/errors/app-error';
+} from '../../../../src/modules/http';
+import { UpstreamUnavailableError } from '../../../../src/modules/errors';
 
 const url = new URL('https://api.example.test/v1/forecast?latitude=1');
 const ctx = { upstream: 'test.upstream' };

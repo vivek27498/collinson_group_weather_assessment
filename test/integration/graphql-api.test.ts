@@ -9,7 +9,7 @@ import {
   createGraphQLHandler,
   type GraphQLHandler,
 } from '../../src/graphql/create-graphql-handler';
-import { createLogger } from '../../src/observability/logger';
+import { createLogger } from '../../src/modules/logger';
 import { loadFixture, type OpenMeteoFixture } from '../support/fixtures';
 import {
   FakeClock,

@@ -1,6 +1,5 @@
 import type { Request, Response } from 'express';
-import type { ErrorDetail } from '../errors/app-error';
-import type { MappedError } from '../errors/error-mapper';
+import type { ErrorDetail, MappedError } from '../errors';
 
 /**
  * One response envelope for every REST endpoint, so clients can always check `success`

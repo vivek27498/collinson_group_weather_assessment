@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import type { Coordinates, WeatherForecastProvider } from '../../application/ports';
 import type { DailyWeather } from '../../domain/types';
-import type { JsonHttpClient } from '../http/json-http-client';
+import type { JsonHttpClient } from '../../modules/http';
 import { nullableNumberArray, parseResponse } from './parse-response';
 
 const UPSTREAM = 'open-meteo.forecast';

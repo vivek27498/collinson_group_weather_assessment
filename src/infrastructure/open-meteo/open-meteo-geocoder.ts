@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import type { Geocoder, LocationQuery } from '../../application/ports';
 import type { GeoLocation } from '../../domain/types';
-import type { JsonHttpClient } from '../http/json-http-client';
+import type { JsonHttpClient } from '../../modules/http';
 import { parseResponse } from './parse-response';
 
 const UPSTREAM = 'open-meteo.geocoding';

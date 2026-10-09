@@ -1,6 +1,6 @@
 import request from 'supertest';
 import { createApp } from '../../src/app';
-import { createLogger } from '../../src/observability/logger';
+import { createLogger } from '../../src/modules/logger';
 
 describe('createApp', () => {
   const app = createApp({ logger: createLogger({ level: 'silent' }) });

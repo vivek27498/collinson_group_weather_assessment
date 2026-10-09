@@ -1,5 +1,5 @@
 import type { Server } from 'node:http';
-import type { Logger } from '../../observability/logger';
+import type { Logger } from '../logger';
 
 /** Anything holding a connection or handle that must be released on exit (DB pool, timers, ...). */
 export interface Closable {
