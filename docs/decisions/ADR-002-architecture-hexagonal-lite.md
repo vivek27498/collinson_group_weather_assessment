@@ -26,3 +26,20 @@ Wiring happens in one composition root using constructor injection, with no DI f
 ## Rejected
 
 CQRS / event sourcing, microservices and a DI container: each adds complexity without a matching problem at this size.
+
+## Code layout (revised 2026-10-09)
+
+Reusable infrastructure that knows nothing about weather lives in `src/modules/`, one folder per module, each
+with an `index.ts` as its public API (code outside a module imports only from that index):
+
+| Module              | Contents                                                                                                    |
+| ------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `modules/http`      | `JsonHttpClient` port, `AxiosJsonClient` (timeout + failure classification), `RetryingJsonClient` decorator |
+| `modules/database`  | Prisma client over the MariaDB driver adapter, explicit pool size, readiness ping                           |
+| `modules/logger`    | pino logger with redaction; AsyncLocalStorage request context stamped on every log line                     |
+| `modules/errors`    | `AppError` taxonomy and the single error policy (`mapError`)                                                |
+| `modules/express`   | Request ids, the response envelope, the central error middleware                                            |
+| `modules/lifecycle` | Graceful shutdown and crash handling                                                                        |
+
+Business code stays in `domain/`, `application/`, `graphql/` and `infrastructure/` (Open-Meteo adapters,
+Prisma repositories). The test tree mirrors this layout.
