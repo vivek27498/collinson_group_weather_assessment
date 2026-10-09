@@ -1,15 +1,19 @@
+import nock from 'nock';
 import {
-  FetchJsonClient,
+  AxiosJsonClient,
   isRetryableStatus,
   UpstreamRequestError,
 } from '../../../../src/modules/http';
 import { UpstreamUnavailableError } from '../../../../src/modules/errors';
 
-const url = new URL('https://api.example.test/v1/forecast?latitude=1');
+/**
+ * The real axios client against a nock-intercepted host: we exercise axios' actual
+ * timeout, status and body handling, not a hand-written fake of it.
+ */
+const HOST = 'https://api.example.test';
+const url = new URL(`${HOST}/v1/forecast?latitude=1`);
 const ctx = { upstream: 'test.upstream' };
-
-const jsonResponse = (body: unknown, status = 200) =>
-  new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
+const client = (timeoutMs = 1000) => new AxiosJsonClient({ timeoutMs });
 
 async function captureError(promise: Promise<unknown>): Promise<UpstreamRequestError> {
   try {
@@ -21,16 +25,25 @@ async function captureError(promise: Promise<unknown>): Promise<UpstreamRequestE
   throw new Error('expected the call to fail');
 }
 
-describe('FetchJsonClient', () => {
-  it('returns parsed JSON and sends an accept header and an abort signal', async () => {
-    const fetchFn = jest.fn().mockResolvedValue(jsonResponse({ ok: 1 }));
-    const client = new FetchJsonClient({ timeoutMs: 1000, fetchFn });
+beforeAll(() => {
+  nock.disableNetConnect();
+});
+afterEach(() => {
+  nock.cleanAll();
+});
+afterAll(() => {
+  nock.enableNetConnect();
+});
 
-    await expect(client.getJson(url, ctx)).resolves.toEqual({ ok: 1 });
-    const [calledUrl, init] = fetchFn.mock.calls[0] as [URL, RequestInit];
-    expect(calledUrl).toBe(url);
-    expect(init.headers).toEqual({ accept: 'application/json' });
-    expect(init.signal).toBeInstanceOf(AbortSignal);
+describe('AxiosJsonClient', () => {
+  it('returns parsed JSON, sends the query string and an accept header', async () => {
+    const scope = nock(HOST, { reqheaders: { accept: 'application/json' } })
+      .get('/v1/forecast')
+      .query({ latitude: '1' })
+      .reply(200, { ok: 1 });
+
+    await expect(client().getJson(url, ctx)).resolves.toEqual({ ok: 1 });
+    expect(scope.isDone()).toBe(true);
   });
 
   it.each([
@@ -40,10 +53,9 @@ describe('FetchJsonClient', () => {
     [400, false],
     [404, false],
   ])('classifies HTTP %i as retryable=%p', async (status, retryable) => {
-    const fetchFn = jest.fn().mockResolvedValue(jsonResponse({ error: true, reason: 'x' }, status));
-    const client = new FetchJsonClient({ timeoutMs: 1000, fetchFn });
+    nock(HOST).get('/v1/forecast').query(true).reply(status, { error: true, reason: 'x' });
 
-    const error = await captureError(client.getJson(url, ctx));
+    const error = await captureError(client().getJson(url, ctx));
 
     expect(error).toMatchObject({
       failure: 'http_status',
@@ -54,51 +66,44 @@ describe('FetchJsonClient', () => {
     expect(isRetryableStatus(status)).toBe(retryable);
   });
 
-  it('treats network failures as retryable', async () => {
-    const fetchFn = jest.fn().mockRejectedValue(new TypeError('fetch failed'));
-    const client = new FetchJsonClient({ timeoutMs: 1000, fetchFn });
+  it('treats network failures as retryable (a real refused connection)', async () => {
+    // A genuinely closed local port, not nock's replyWithError: with nock 14 that simulated error
+    // never reaches axios (the request hangs until the timeout), which would hide this path.
+    nock.enableNetConnect('127.0.0.1');
+    try {
+      const refused = new URL('http://127.0.0.1:9/v1/forecast');
 
-    await expect(captureError(client.getJson(url, ctx))).resolves.toMatchObject({
-      failure: 'network',
-      retryable: true,
-    });
+      await expect(captureError(client().getJson(refused, ctx))).resolves.toMatchObject({
+        failure: 'network',
+        retryable: true,
+      });
+    } finally {
+      nock.disableNetConnect();
+    }
   });
 
-  it('times out a slow upstream (real AbortSignal) and marks it retryable', async () => {
-    // A fetch that never resolves on its own, only when the signal aborts, like a hung socket.
-    const fetchFn = jest.fn(
-      (_url: URL, init?: RequestInit) =>
-        new Promise<Response>((_resolve, reject) => {
-          init?.signal?.addEventListener('abort', () => {
-            reject(init.signal?.reason as Error);
-          });
-        }),
-    );
-    const client = new FetchJsonClient({ timeoutMs: 50, fetchFn: fetchFn as typeof fetch });
+  it('times out a slow upstream and marks it retryable', async () => {
+    nock(HOST).get('/v1/forecast').query(true).delay(300).reply(200, { ok: 1 });
 
-    await expect(captureError(client.getJson(url, ctx))).resolves.toMatchObject({
+    await expect(captureError(client(50).getJson(url, ctx))).resolves.toMatchObject({
       failure: 'timeout',
       retryable: true,
     });
   });
 
   it('rejects a non-JSON body as a non-retryable invalid response', async () => {
-    const fetchFn = jest.fn().mockResolvedValue(new Response('<html>oops</html>', { status: 200 }));
-    const client = new FetchJsonClient({ timeoutMs: 1000, fetchFn });
+    nock(HOST).get('/v1/forecast').query(true).reply(200, '<html>oops</html>');
 
-    await expect(captureError(client.getJson(url, ctx))).resolves.toMatchObject({
+    await expect(captureError(client().getJson(url, ctx))).resolves.toMatchObject({
       failure: 'invalid_response',
       retryable: false,
     });
   });
 
   it('is an UpstreamUnavailableError with a client-safe message (no URL, status or body)', async () => {
-    const fetchFn = jest
-      .fn()
-      .mockResolvedValue(new Response('internal stack trace at db-01.internal', { status: 500 }));
-    const client = new FetchJsonClient({ timeoutMs: 1000, fetchFn });
+    nock(HOST).get('/v1/forecast').query(true).reply(500, 'internal stack trace at db-01.internal');
 
-    const error = await captureError(client.getJson(url, ctx));
+    const error = await captureError(client().getJson(url, ctx));
 
     expect(error).toBeInstanceOf(UpstreamUnavailableError);
     expect(error.message).toBe('The weather provider is temporarily unavailable');

@@ -17,6 +17,7 @@ describe('loadConfig', () => {
       port: 4100,
       logLevel: 'warn',
       databaseUrl: 'mysql://app:secret@localhost:3306/weather',
+      databasePoolSize: 10,
       openMeteo: {
         geocodingUrl: 'https://geocoding-api.open-meteo.com/v1/search',
         forecastUrl: 'https://api.open-meteo.com/v1/forecast',
@@ -57,6 +58,7 @@ describe('loadConfig', () => {
     ],
     ['timeout too small', { ...validEnv, UPSTREAM_TIMEOUT_MS: '5' }, 'UPSTREAM_TIMEOUT_MS'],
     ['too many retries', { ...validEnv, UPSTREAM_MAX_RETRIES: '50' }, 'UPSTREAM_MAX_RETRIES'],
+    ['pool size out of range', { ...validEnv, DB_POOL_SIZE: '0' }, 'DB_POOL_SIZE'],
   ])('rejects %s and names the variable', (_case, env, variable) => {
     expect(() => loadConfig(env)).toThrow(ConfigError);
     expect(() => loadConfig(env)).toThrow(variable);

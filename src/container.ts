@@ -6,7 +6,7 @@ import { RankingService } from './application/ranking-service';
 import type { AppConfig } from './config/env';
 import { defaultScoringConfig } from './config/scoring';
 import { createScorers } from './domain/scoring/registry';
-import { FetchJsonClient, RetryingJsonClient } from './modules/http';
+import { AxiosJsonClient, RetryingJsonClient } from './modules/http';
 import { OpenMeteoForecast } from './infrastructure/open-meteo/open-meteo-forecast';
 import { OpenMeteoGeocoder } from './infrastructure/open-meteo/open-meteo-geocoder';
 import { OpenMeteoMarine } from './infrastructure/open-meteo/open-meteo-marine';
@@ -37,7 +37,7 @@ export function createServices(
 ): Services {
   // Decorator: resilience (retries) wraps the plain client (timeout + error classification).
   const http = new RetryingJsonClient(
-    new FetchJsonClient({ timeoutMs: config.upstream.timeoutMs }),
+    new AxiosJsonClient({ timeoutMs: config.upstream.timeoutMs }),
     { maxRetries: config.upstream.maxRetries, logger },
   );
 

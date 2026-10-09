@@ -1,6 +1,7 @@
+import axios, { type AxiosInstance, type AxiosResponse } from 'axios';
 import { UpstreamUnavailableError } from '../errors';
 
-/** Minimal port for "GET this URL and give me parsed JSON". Adapters depend on this, not on fetch. */
+/** Minimal port for "GET this URL and give me parsed JSON". Adapters depend on this, not on axios. */
 export interface JsonHttpClient {
   getJson(url: URL, context: RequestContext): Promise<unknown>;
 }
@@ -39,35 +40,39 @@ export function isRetryableStatus(status: number): boolean {
   return status >= 500 || status === 429;
 }
 
-export interface FetchJsonClientOptions {
+export interface AxiosJsonClientOptions {
   readonly timeoutMs: number;
-  /** Injected for tests; defaults to Node's global fetch. */
-  readonly fetchFn?: typeof fetch;
 }
 
 /**
- * The plain client: one attempt, bounded by a timeout, classified failures.
+ * The plain client: one attempt with axios, bounded by a timeout, failures classified.
  * Retries are added by wrapping it (see RetryingJsonClient). That's the Decorator pattern.
+ *
+ * axios is configured to hand us the raw response (any status, body as text) so that *we*
+ * decide what counts as a failure. By default axios throws on non-2xx statuses and quietly
+ * returns invalid JSON as a string; here every outcome maps to one of our failure classes.
  */
-export class FetchJsonClient implements JsonHttpClient {
-  private readonly fetchFn: typeof fetch;
+export class AxiosJsonClient implements JsonHttpClient {
+  private readonly http: AxiosInstance;
 
-  constructor(private readonly options: FetchJsonClientOptions) {
-    this.fetchFn = options.fetchFn ?? fetch;
+  constructor(options: AxiosJsonClientOptions) {
+    this.http = axios.create({
+      timeout: options.timeoutMs,
+      headers: { accept: 'application/json' },
+      responseType: 'text',
+      transformResponse: [(data: unknown) => data], // keep the raw body; we parse it below
+      validateStatus: () => true, // statuses are classified below, not thrown by axios
+      transitional: { clarifyTimeoutError: true }, // timeouts surface as ETIMEDOUT
+    });
   }
 
   async getJson(url: URL, { upstream }: RequestContext): Promise<unknown> {
-    let response: Response;
+    let response: AxiosResponse<string>;
     try {
-      response = await this.fetchFn(url, {
-        headers: { accept: 'application/json' },
-        signal: AbortSignal.timeout(this.options.timeoutMs),
-      });
+      response = await this.http.get<string>(url.toString());
     } catch (err) {
-      // Check the name, not `instanceof`: the abort reason is a DOMException, which may come
-      // from another realm (e.g. a test sandbox), where `instanceof Error` is false.
       const timedOut =
-        typeof err === 'object' && err !== null && 'name' in err && err.name === 'TimeoutError';
+        axios.isAxiosError(err) && (err.code === 'ETIMEDOUT' || err.code === 'ECONNABORTED');
       throw new UpstreamRequestError(
         upstream,
         timedOut ? 'timeout' : 'network',
@@ -77,9 +82,9 @@ export class FetchJsonClient implements JsonHttpClient {
       );
     }
 
-    if (!response.ok) {
-      // Drain the body so the connection can be reused; keep a short excerpt for logs.
-      const excerpt = (await response.text().catch(() => '')).slice(0, 200);
+    if (response.status < 200 || response.status >= 300) {
+      // Keep a short excerpt of the body for logs; it is never shown to the client.
+      const excerpt = response.data.slice(0, 200);
       throw new UpstreamRequestError(
         upstream,
         'http_status',
@@ -90,7 +95,7 @@ export class FetchJsonClient implements JsonHttpClient {
     }
 
     try {
-      return await response.json();
+      return JSON.parse(response.data) as unknown;
     } catch (err) {
       throw new UpstreamRequestError(upstream, 'invalid_response', response.status, false, err);
     }
