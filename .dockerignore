@@ -6,6 +6,5 @@ coverage
 .env.*
 test
 docs
-load
 *.md
 src/generated
