@@ -1,6 +1,5 @@
 import type { ErrorRequestHandler, RequestHandler } from 'express';
-import { NotFoundError } from '../errors/app-error';
-import { mapError } from '../errors/error-mapper';
+import { NotFoundError, mapError } from '../errors';
 import { buildErrorBody } from './respond';
 
 /**

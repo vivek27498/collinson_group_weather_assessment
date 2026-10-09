@@ -1,7 +1,7 @@
 import type { ForecastRepository, ForecastSnapshot, MarineStatus } from '../../application/ports';
 import type { DayConditions } from '../../domain/types';
 import { MarineStatus as DbMarineStatus, type DailyForecast } from '../../generated/prisma/client';
-import type { Database } from './prisma-client';
+import type { Database } from '../../modules/database';
 
 const TO_DB: Readonly<Record<MarineStatus, DbMarineStatus>> = {
   available: DbMarineStatus.AVAILABLE,

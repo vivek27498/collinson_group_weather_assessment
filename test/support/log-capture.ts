@@ -1,5 +1,5 @@
 import { Writable } from 'node:stream';
-import { createLogger, type Logger } from '../../src/observability/logger';
+import { createLogger, type Logger } from '../../src/modules/logger';
 
 /** A real pino logger whose JSON lines are captured in memory, so tests can assert on logs. */
 export function captureLogs(level = 'debug'): {

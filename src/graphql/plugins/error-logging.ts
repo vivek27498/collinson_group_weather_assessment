@@ -1,6 +1,6 @@
 import type { ApolloServerPlugin } from '@apollo/server';
 import { GraphQLError } from 'graphql';
-import { mapError } from '../../shared/errors/error-mapper';
+import { mapError } from '../../modules/errors';
 import type { GraphQLContext } from '../context';
 
 /**

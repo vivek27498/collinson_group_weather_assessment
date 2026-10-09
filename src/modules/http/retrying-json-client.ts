@@ -1,4 +1,4 @@
-import type { Logger } from '../../observability/logger';
+import type { Logger } from '../logger';
 import { UpstreamRequestError, type JsonHttpClient, type RequestContext } from './json-http-client';
 
 export interface RetryOptions {

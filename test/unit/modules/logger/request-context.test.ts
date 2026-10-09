@@ -1,14 +1,14 @@
 import express from 'express';
 import { pinoHttp } from 'pino-http';
 import request from 'supertest';
-import { createLogger } from '../../../src/observability/logger';
 import {
+  createLogger,
   currentRequestContext,
   requestContextMiddleware,
   runWithRequestContext,
-} from '../../../src/observability/request-context';
-import { genReqId } from '../../../src/shared/http/request-id';
-import { captureLogs } from '../../support/log-capture';
+} from '../../../../src/modules/logger';
+import { genReqId } from '../../../../src/modules/express';
+import { captureLogs } from '../../../support/log-capture';
 
 describe('request context + logger mixin', () => {
   it('stamps every log line with the request id, across async hops', async () => {

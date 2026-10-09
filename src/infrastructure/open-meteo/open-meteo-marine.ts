@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import type { Coordinates, MarineForecastProvider } from '../../application/ports';
 import type { MarineDay } from '../../domain/types';
-import type { JsonHttpClient } from '../http/json-http-client';
+import type { JsonHttpClient } from '../../modules/http';
 import { FORECAST_DAYS } from './open-meteo-forecast';
 import { nullableNumberArray, parseResponse } from './parse-response';
 

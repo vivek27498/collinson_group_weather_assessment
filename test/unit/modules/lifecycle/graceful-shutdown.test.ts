@@ -1,13 +1,13 @@
 import { EventEmitter } from 'node:events';
 import http, { type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { createLogger } from '../../../src/observability/logger';
+import { createLogger } from '../../../../src/modules/logger';
 import {
   createShutdownController,
   registerProcessHandlers,
   type Closable,
   type ShutdownController,
-} from '../../../src/shared/process/graceful-shutdown';
+} from '../../../../src/modules/lifecycle';
 
 const logger = createLogger({ level: 'silent' });
 

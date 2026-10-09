@@ -2,11 +2,14 @@ import express from 'express';
 import { pinoHttp } from 'pino-http';
 import request from 'supertest';
 import { z } from 'zod';
-import { createLogger } from '../../../src/observability/logger';
-import { NotFoundError, UpstreamUnavailableError } from '../../../src/shared/errors/app-error';
-import { errorHandler, notFoundHandler } from '../../../src/shared/http/error-handler';
-import { genReqId } from '../../../src/shared/http/request-id';
-import { sendSuccess } from '../../../src/shared/http/respond';
+import { createLogger } from '../../../../src/modules/logger';
+import { NotFoundError, UpstreamUnavailableError } from '../../../../src/modules/errors';
+import {
+  errorHandler,
+  notFoundHandler,
+  genReqId,
+  sendSuccess,
+} from '../../../../src/modules/express';
 
 /**
  * Exercises the shared middleware in isolation with routes that throw every kind of

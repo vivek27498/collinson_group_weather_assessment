@@ -1,5 +1,5 @@
 import type { GeoLocation } from '../domain/types';
-import type { Logger } from '../observability/logger';
+import type { Logger } from '../modules/logger';
 import type { Clock } from './clock';
 import type { GeocodeCache, Geocoder, LocationQuery } from './ports';
 import { SingleFlight } from './single-flight';

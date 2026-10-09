@@ -1,5 +1,4 @@
-import type { JsonHttpClient } from '../../../src/infrastructure/http/json-http-client';
-import { UpstreamRequestError } from '../../../src/infrastructure/http/json-http-client';
+import { type JsonHttpClient, UpstreamRequestError } from '../../../src/modules/http';
 import {
   DAILY_VARIABLES,
   maxPerDate,

@@ -1,16 +1,16 @@
-import type { Coordinates } from '../../../src/application/ports';
+import type {
+  Coordinates,
+  MarineForecastProvider,
+  WeatherForecastProvider,
+} from '../../../src/application/ports';
 import {
   ForecastService,
   gridCell,
   joinByDate,
   MARINE_UNAVAILABLE_WARNING,
 } from '../../../src/application/forecast-service';
-import type {
-  MarineForecastProvider,
-  WeatherForecastProvider,
-} from '../../../src/application/ports';
 import type { DailyWeather, MarineDay } from '../../../src/domain/types';
-import { createLogger } from '../../../src/observability/logger';
+import { createLogger } from '../../../src/modules/logger';
 import { aDay, aMarineDay } from '../../support/builders';
 import { captureLogs } from '../../support/log-capture';
 import { FakeClock, InMemoryForecastRepository } from '../../support/in-memory-repositories';

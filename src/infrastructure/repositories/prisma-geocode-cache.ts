@@ -2,7 +2,7 @@ import { z } from 'zod';
 import type { CachedGeocode, GeocodeCache } from '../../application/ports';
 import type { GeoLocation } from '../../domain/types';
 import type { Location } from '../../generated/prisma/client';
-import type { Database } from './prisma-client';
+import type { Database } from '../../modules/database';
 
 // Even our own JSON column is validated on the way out: a bad row is a cache miss, not a crash.
 const locationIdsSchema = z.array(z.number().int());

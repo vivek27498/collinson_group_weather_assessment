@@ -1,7 +1,7 @@
 import { CachedGeocoder, geocodeQueryKey } from '../../../src/application/cached-geocoder';
 import type { Geocoder } from '../../../src/application/ports';
 import type { GeoLocation } from '../../../src/domain/types';
-import { createLogger } from '../../../src/observability/logger';
+import { createLogger } from '../../../src/modules/logger';
 import { FakeClock, InMemoryGeocodeCache } from '../../support/in-memory-repositories';
 import { captureLogs } from '../../support/log-capture';
 

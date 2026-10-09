@@ -2,14 +2,11 @@ import { createApp } from './app';
 import { loadConfig } from './config/env';
 import { createServices } from './container';
 import { createGraphQLHandler } from './graphql/create-graphql-handler';
-import { createDatabase, pingDatabase } from './infrastructure/db/prisma-client';
-import { PrismaForecastRepository } from './infrastructure/db/prisma-forecast-repository';
-import { PrismaGeocodeCache } from './infrastructure/db/prisma-geocode-cache';
-import { createLogger } from './observability/logger';
-import {
-  createShutdownController,
-  registerProcessHandlers,
-} from './shared/process/graceful-shutdown';
+import { createDatabase, pingDatabase } from './modules/database';
+import { PrismaForecastRepository } from './infrastructure/repositories/prisma-forecast-repository';
+import { PrismaGeocodeCache } from './infrastructure/repositories/prisma-geocode-cache';
+import { createLogger } from './modules/logger';
+import { createShutdownController, registerProcessHandlers } from './modules/lifecycle';
 
 /**
  * Composition root: the only place that reads the environment, creates long-lived

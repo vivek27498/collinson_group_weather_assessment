@@ -1,6 +1,6 @@
 import { unwrapResolverError } from '@apollo/server/errors';
 import { GraphQLError, type GraphQLFormattedError } from 'graphql';
-import { mapError } from '../shared/errors/error-mapper';
+import { mapError } from '../modules/errors';
 
 /**
  * Apollo's formatError hook, delegating to THE shared error policy (same one the REST error

@@ -3,13 +3,9 @@ import path from 'node:path';
 import { MySqlContainer, type StartedMySqlContainer } from '@testcontainers/mysql';
 import type { ForecastSnapshot } from '../../src/application/ports';
 import type { GeoLocation } from '../../src/domain/types';
-import {
-  createDatabase,
-  pingDatabase,
-  type Database,
-} from '../../src/infrastructure/db/prisma-client';
-import { PrismaForecastRepository } from '../../src/infrastructure/db/prisma-forecast-repository';
-import { PrismaGeocodeCache } from '../../src/infrastructure/db/prisma-geocode-cache';
+import { createDatabase, pingDatabase, type Database } from '../../src/modules/database';
+import { PrismaForecastRepository } from '../../src/infrastructure/repositories/prisma-forecast-repository';
+import { PrismaGeocodeCache } from '../../src/infrastructure/repositories/prisma-geocode-cache';
 import { aDay, aMarineDay, conditions } from '../support/builders';
 
 /**

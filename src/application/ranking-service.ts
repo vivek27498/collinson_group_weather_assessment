@@ -2,7 +2,7 @@ import type { ActivityScorer } from '../domain/scoring/activity-scorer';
 import { rankActivities } from '../domain/scoring/rank-activities';
 import type { ScoringConfig } from '../domain/scoring/scoring-config';
 import type { ActivityRanking, GeoLocation } from '../domain/types';
-import type { ErrorDetail } from '../shared/errors/app-error';
+import type { ErrorDetail } from '../modules/errors';
 import type { ForecastSource } from './forecast-service';
 import type { Geocoder, LocationQuery } from './ports';
 import { parseRankingInput } from './ranking-input';
