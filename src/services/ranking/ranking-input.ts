@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import type { ErrorDetail } from '../modules/errors';
-import type { LocationQuery } from './interfaces';
+import type { ErrorDetail } from '../../modules/errors';
+import type { LocationQuery } from '../interfaces';
 
 /**
  * Decides what counts as a valid search. It lives here (not in the GraphQL code) so that any

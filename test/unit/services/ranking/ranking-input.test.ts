@@ -2,7 +2,7 @@ import {
   CITY_MAX_LENGTH,
   normalisePlaceName,
   parseRankingInput,
-} from '../../../src/services/ranking-input';
+} from '../../../../src/services/ranking/ranking-input';
 
 describe('parseRankingInput', () => {
   describe('accepts real place names in any script', () => {

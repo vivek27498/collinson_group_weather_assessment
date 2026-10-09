@@ -1,10 +1,10 @@
-import type { ActivityScorer } from '../scoring/activity-scorer';
-import { rankActivities } from '../scoring/rank-activities';
-import type { ScoringConfig } from '../config/scoring';
-import type { ActivityRanking, GeoLocation } from '../types';
-import type { ErrorDetail } from '../modules/errors';
-import type { ForecastSource } from './forecast-service';
-import type { Geocoder, LocationQuery } from './interfaces';
+import type { ActivityScorer } from '../../scoring/activity-scorer';
+import { rankActivities } from '../../scoring/rank-activities';
+import type { ScoringConfig } from '../../config/scoring';
+import type { ActivityRanking, GeoLocation } from '../../types';
+import type { ErrorDetail } from '../../modules/errors';
+import type { ForecastSource } from '../forecast/forecast-service';
+import type { Geocoder, LocationQuery } from '../interfaces';
 import { parseRankingInput } from './ranking-input';
 
 // The three possible answers. `kind` tells them apart.

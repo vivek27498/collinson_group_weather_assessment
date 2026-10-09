@@ -1,7 +1,7 @@
-import { defaultScoringConfig } from '../../../src/config/scoring';
-import { SkiScorer } from '../../../src/scoring/ski-scorer';
-import type { DailyWeather, LocationContext } from '../../../src/types';
-import { aSkiDay, conditions } from '../../support/builders';
+import { defaultScoringConfig } from '../../../../src/config/scoring';
+import { SkiScorer } from '../../../../src/scoring/scorers/ski-scorer';
+import type { DailyWeather, LocationContext } from '../../../../src/types';
+import { aSkiDay, conditions } from '../../../support/builders';
 
 const scorer = new SkiScorer(defaultScoringConfig.skiing);
 const mountain: LocationContext = { elevationM: 1800 };

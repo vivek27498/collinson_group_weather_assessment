@@ -1,8 +1,8 @@
-import { DbFirstGeocoder } from './services/db-first-geocoder';
-import { systemClock, type Clock } from './services/clock';
-import { ForecastService } from './services/forecast-service';
+import { DbFirstGeocoder } from './services/location/db-first-geocoder';
+import { systemClock, type Clock } from './utils/clock';
+import { ForecastService } from './services/forecast/forecast-service';
 import type { ForecastRepository, GeocodeStore } from './services/interfaces';
-import { RankingService } from './services/ranking-service';
+import { RankingService } from './services/ranking/ranking-service';
 import type { AppConfig } from './config/env';
 import { defaultScoringConfig } from './config/scoring';
 import { createScorers } from './scoring/registry';

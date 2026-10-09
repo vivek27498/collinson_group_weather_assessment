@@ -2,7 +2,7 @@ import { ApolloServer } from '@apollo/server';
 import { ApolloServerPluginLandingPageDisabled } from '@apollo/server/plugin/disabled';
 import { expressMiddleware } from '@as-integrations/express5';
 import type { RequestHandler } from 'express';
-import type { RankingService } from '../services/ranking-service';
+import type { RankingService } from '../services/ranking/ranking-service';
 import type { GraphQLContext } from './context';
 import { formatGraphQLError } from './format-error';
 import { errorLoggingPlugin } from './error-logging-plugin';

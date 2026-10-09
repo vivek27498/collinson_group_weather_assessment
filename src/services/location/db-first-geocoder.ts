@@ -1,8 +1,8 @@
-import type { GeoLocation } from '../types';
-import type { Logger } from '../modules/logger';
-import type { Clock } from './clock';
-import type { GeocodeSearch, GeocodeStore, Geocoder, LocationQuery } from './interfaces';
-import { RequestDeduplicator } from './request-deduplicator';
+import type { GeoLocation } from '../../types';
+import type { Logger } from '../../modules/logger';
+import type { Clock } from '../../utils/clock';
+import type { GeocodeSearch, GeocodeStore, Geocoder, LocationQuery } from '../interfaces';
+import { RequestDeduplicator } from '../../utils/request-deduplicator';
 
 export interface DbFirstGeocoderOptions {
   clock: Clock;

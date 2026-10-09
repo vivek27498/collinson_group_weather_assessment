@@ -2,18 +2,18 @@ import type {
   Coordinates,
   MarineForecastProvider,
   WeatherForecastProvider,
-} from '../../../src/services/interfaces';
+} from '../../../../src/services/interfaces';
 import {
   ForecastService,
   gridCell,
   joinByDate,
   MARINE_UNAVAILABLE_WARNING,
-} from '../../../src/services/forecast-service';
-import type { DailyWeather, MarineDay } from '../../../src/types';
-import { createLogger } from '../../../src/modules/logger';
-import { aDay, aMarineDay } from '../../support/builders';
-import { captureLogs } from '../../support/log-capture';
-import { FakeClock, InMemoryForecastRepository } from '../../support/in-memory-repositories';
+} from '../../../../src/services/forecast/forecast-service';
+import type { DailyWeather, MarineDay } from '../../../../src/types';
+import { createLogger } from '../../../../src/modules/logger';
+import { aDay, aMarineDay } from '../../../support/builders';
+import { captureLogs } from '../../../support/log-capture';
+import { FakeClock, InMemoryForecastRepository } from '../../../support/in-memory-repositories';
 
 const MIN = 60_000;
 const HOUR = 60 * MIN;

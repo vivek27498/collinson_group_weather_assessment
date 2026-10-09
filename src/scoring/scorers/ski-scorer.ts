@@ -1,6 +1,6 @@
-import { Activity, type DayConditions, type LocationContext } from '../types';
-import { categoriseWeatherCode, isWet, WeatherCategory } from './weather-codes';
-import type { ActivityScorer } from './activity-scorer';
+import { Activity, type DayConditions, type LocationContext } from '../../types';
+import { categoriseWeatherCode, isWet, WeatherCategory } from '../weather-codes';
+import type { ActivityScorer } from '../activity-scorer';
 import {
   adjustIf,
   calculateScore,
@@ -8,8 +8,8 @@ import {
   rampPenalty,
   type Adjustment,
   type ScoreResult,
-} from './score';
-import type { ScoringConfig } from '../config/scoring';
+} from '../score';
+import type { ScoringConfig } from '../../config/scoring';
 
 /**
  * Skiing cares most about snow on the ground, then about conditions that close lifts

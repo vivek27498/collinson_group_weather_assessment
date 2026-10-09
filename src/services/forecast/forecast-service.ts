@@ -1,6 +1,6 @@
-import type { DayConditions, MarineDay } from '../types';
-import type { Logger } from '../modules/logger';
-import type { Clock } from './clock';
+import type { DayConditions, MarineDay } from '../../types';
+import type { Logger } from '../../modules/logger';
+import type { Clock } from '../../utils/clock';
 import type {
   Coordinates,
   ForecastRepository,
@@ -8,8 +8,8 @@ import type {
   MarineForecastProvider,
   MarineStatus,
   WeatherForecastProvider,
-} from './interfaces';
-import { RequestDeduplicator } from './request-deduplicator';
+} from '../interfaces';
+import { RequestDeduplicator } from '../../utils/request-deduplicator';
 
 /** What the ranking needs: the days to score, and how fresh the data is. */
 export interface Forecast {

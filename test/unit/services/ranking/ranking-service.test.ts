@@ -1,10 +1,13 @@
-import type { Forecast, ForecastSource } from '../../../src/services/forecast-service';
-import type { Coordinates, Geocoder } from '../../../src/services/interfaces';
-import { RankingService, sameNameAlternatives } from '../../../src/services/ranking-service';
-import { defaultScoringConfig } from '../../../src/config/scoring';
-import { createScorers } from '../../../src/scoring/registry';
-import { Activity, type GeoLocation } from '../../../src/types';
-import { aDay, aMarineDay, conditions } from '../../support/builders';
+import type { Forecast, ForecastSource } from '../../../../src/services/forecast/forecast-service';
+import type { Coordinates, Geocoder } from '../../../../src/services/interfaces';
+import {
+  RankingService,
+  sameNameAlternatives,
+} from '../../../../src/services/ranking/ranking-service';
+import { defaultScoringConfig } from '../../../../src/config/scoring';
+import { createScorers } from '../../../../src/scoring/registry';
+import { Activity, type GeoLocation } from '../../../../src/types';
+import { aDay, aMarineDay, conditions } from '../../../support/builders';
 
 const biarritz: GeoLocation = {
   id: 1,

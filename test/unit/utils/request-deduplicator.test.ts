@@ -1,4 +1,4 @@
-import { RequestDeduplicator } from '../../../src/services/request-deduplicator';
+import { RequestDeduplicator } from '../../../src/utils/request-deduplicator';
 
 describe('RequestDeduplicator', () => {
   it('shares one in-flight promise per key', async () => {

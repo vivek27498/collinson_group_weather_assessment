@@ -1,7 +1,7 @@
-import { Activity, type DayConditions, type LocationContext } from '../types';
-import type { ActivityScorer } from './activity-scorer';
-import { calculateScore, type ScoreResult } from './score';
-import type { ScoringConfig } from '../config/scoring';
+import { Activity, type DayConditions, type LocationContext } from '../../types';
+import type { ActivityScorer } from '../activity-scorer';
+import { calculateScore, type ScoreResult } from '../score';
+import type { ScoringConfig } from '../../config/scoring';
 
 /**
  * Indoor sightseeing (museums, galleries) is possible in any weather, so it starts from a

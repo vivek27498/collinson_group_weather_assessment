@@ -37,8 +37,9 @@ The folders were renamed so their names say what they hold, rather than using ar
 | Folder                      | Contents                                                                                     |
 | --------------------------- | -------------------------------------------------------------------------------------------- |
 | `src/types.ts`              | Shared data types (weather, scores, places)                                                  |
-| `src/scoring/`              | The four scorers, the scoring helpers, weather codes, ranking                                |
-| `src/services/`             | `RankingService`, `ForecastService`, `DbFirstGeocoder`, input validation, `interfaces.ts`    |
+| `src/scoring/`              | Ranking, scoring helpers, weather codes; `scorers/` holds one scorer per activity            |
+| `src/services/`             | Use cases grouped by feature: `ranking/`, `location/`, `forecast/`; shared `interfaces.ts`   |
+| `src/utils/`                | Small generic helpers: `clock.ts`, `request-deduplicator.ts`                                 |
 | `src/providers/open-meteo/` | Open-Meteo geocoding, forecast and marine clients                                            |
 | `src/repositories/`         | MySQL storage through Prisma                                                                 |
 | `src/graphql/`              | Schema, resolvers, Apollo setup, error formatting                                            |

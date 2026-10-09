@@ -1,9 +1,9 @@
 import type { ActivityScorer } from './activity-scorer';
-import { IndoorSightseeingScorer } from './indoor-sightseeing-scorer';
-import { OutdoorSightseeingScorer } from './outdoor-sightseeing-scorer';
+import { IndoorSightseeingScorer } from './scorers/indoor-sightseeing-scorer';
+import { OutdoorSightseeingScorer } from './scorers/outdoor-sightseeing-scorer';
 import type { ScoringConfig } from '../config/scoring';
-import { SkiScorer } from './ski-scorer';
-import { SurfScorer } from './surf-scorer';
+import { SkiScorer } from './scorers/ski-scorer';
+import { SurfScorer } from './scorers/surf-scorer';
 
 /**
  * The list of all activities we score. The ranking code just loops over this list,

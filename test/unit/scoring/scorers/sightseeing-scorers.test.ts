@@ -1,9 +1,9 @@
-import { defaultScoringConfig } from '../../../src/config/scoring';
-import type { ActivityScorer } from '../../../src/scoring/activity-scorer';
-import { IndoorSightseeingScorer } from '../../../src/scoring/indoor-sightseeing-scorer';
-import { OutdoorSightseeingScorer } from '../../../src/scoring/outdoor-sightseeing-scorer';
-import { Activity, type DailyWeather } from '../../../src/types';
-import { aDay, conditions } from '../../support/builders';
+import { defaultScoringConfig } from '../../../../src/config/scoring';
+import type { ActivityScorer } from '../../../../src/scoring/activity-scorer';
+import { IndoorSightseeingScorer } from '../../../../src/scoring/scorers/indoor-sightseeing-scorer';
+import { OutdoorSightseeingScorer } from '../../../../src/scoring/scorers/outdoor-sightseeing-scorer';
+import { Activity, type DailyWeather } from '../../../../src/types';
+import { aDay, conditions } from '../../../support/builders';
 
 const city = { elevationM: 35 };
 // Typed as the interface, exactly how the registry and ranking code use scorers.

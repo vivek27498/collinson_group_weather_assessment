@@ -2,12 +2,12 @@ import {
   DbFirstGeocoder,
   geocodeQueryKey,
   toGeocodeSearch,
-} from '../../../src/services/db-first-geocoder';
-import type { Geocoder } from '../../../src/services/interfaces';
-import type { GeoLocation } from '../../../src/types';
-import { createLogger } from '../../../src/modules/logger';
-import { FakeClock, InMemoryGeocodeStore } from '../../support/in-memory-repositories';
-import { captureLogs } from '../../support/log-capture';
+} from '../../../../src/services/location/db-first-geocoder';
+import type { Geocoder } from '../../../../src/services/interfaces';
+import type { GeoLocation } from '../../../../src/types';
+import { createLogger } from '../../../../src/modules/logger';
+import { FakeClock, InMemoryGeocodeStore } from '../../../support/in-memory-repositories';
+import { captureLogs } from '../../../support/log-capture';
 
 const HOUR = 3_600_000;
 const DAY = 24 * HOUR;

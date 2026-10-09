@@ -1,4 +1,4 @@
-import type { RankingOutcome } from '../services/ranking-service';
+import type { RankingOutcome } from '../services/ranking/ranking-service';
 import type { GeoLocation } from '../types';
 import type { GraphQLContext } from './context';
 

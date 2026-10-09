@@ -1,4 +1,4 @@
-import type { RankingService } from '../services/ranking-service';
+import type { RankingService } from '../services/ranking/ranking-service';
 import type { Logger } from '../modules/logger';
 
 /** Per-request context. Built fresh for every operation, so nothing leaks between requests. */

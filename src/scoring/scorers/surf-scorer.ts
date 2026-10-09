@@ -1,6 +1,6 @@
-import { Activity, type DayConditions } from '../types';
-import { categoriseWeatherCode, WeatherCategory } from './weather-codes';
-import type { ActivityScorer } from './activity-scorer';
+import { Activity, type DayConditions } from '../../types';
+import { categoriseWeatherCode, WeatherCategory } from '../weather-codes';
+import type { ActivityScorer } from '../activity-scorer';
 import {
   adjustIf,
   calculateScore,
@@ -8,8 +8,8 @@ import {
   notApplicable,
   rampPenalty,
   type ScoreResult,
-} from './score';
-import type { ScoringConfig } from '../config/scoring';
+} from '../score';
+import type { ScoringConfig } from '../../config/scoring';
 
 /**
  * Surfing needs rideable waves (roughly 1–2.5 m with a decent period) and not too much wind.

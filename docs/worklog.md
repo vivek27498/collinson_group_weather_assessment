@@ -251,3 +251,12 @@ Unpolished notes on how the work is going, newest last. Cuts and the reasons for
 - Also: shutdown handling simplified to one `setupGracefulShutdown` function, `container.ts` renamed to
   `create-services.ts`, and the geocoder classes renamed to say "database" (`DbFirstGeocoder`, `GeocodeStore`).
 - 338 tests passing (303 unit + 35 integration).
+
+## 2026-10-09: Grouping folders by feature
+
+- `services/` is now grouped by feature: `ranking/` (RankingService + input validation), `location/`
+  (DbFirstGeocoder) and `forecast/` (ForecastService), with the shared `interfaces.ts` at the top.
+- New `utils/` for the two generic helpers: `clock.ts` and `request-deduplicator.ts`.
+- The four scorers moved to `scoring/scorers/`, so `scoring/` itself shows only the shared pieces.
+- `git mv` plus a scripted import rewrite; no code changes. Tests mirror the new layout.
+- Also: line-by-line plain-English comments in `app.ts`.

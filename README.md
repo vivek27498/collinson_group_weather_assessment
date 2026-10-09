@@ -125,8 +125,13 @@ where they earn their place: Strategy + Registry (scorers), Decorator (`Retrying
 src/
   index.ts, create-services.ts, app.ts   start-up, wiring, Express app
   types.ts                         shared data types
-  scoring/                         the four scorers and the ranking (pure functions)
-  services/                        RankingService, ForecastService, DbFirstGeocoder, input validation
+  scoring/                         ranking + scoring helpers (pure functions)
+    scorers/                       one scorer per activity: ski, surf, outdoor, indoor
+  services/                        the use cases, grouped by feature (+ interfaces.ts)
+    ranking/                       RankingService + input validation
+    location/                      DbFirstGeocoder (find a place: database first, then Open-Meteo)
+    forecast/                      ForecastService (weather: saved data first, then Open-Meteo)
+  utils/                           small generic helpers: clock, request deduplicator
   providers/open-meteo/            Open-Meteo geocoding, forecast and marine clients
   repositories/                    MySQL storage through Prisma
   graphql/                         schema, resolvers, Apollo setup

@@ -1,8 +1,8 @@
-import { Activity, type DayConditions } from '../types';
-import { categoriseWeatherCode, WeatherCategory } from './weather-codes';
-import type { ActivityScorer } from './activity-scorer';
-import { adjustIf, calculateScore, formatNumber, rampPenalty, type ScoreResult } from './score';
-import type { ScoringConfig } from '../config/scoring';
+import { Activity, type DayConditions } from '../../types';
+import { categoriseWeatherCode, WeatherCategory } from '../weather-codes';
+import type { ActivityScorer } from '../activity-scorer';
+import { adjustIf, calculateScore, formatNumber, rampPenalty, type ScoreResult } from '../score';
+import type { ScoringConfig } from '../../config/scoring';
 
 /**
  * Outdoor sightseeing: comfortable temperature, dry, not too windy, ideally sunny.

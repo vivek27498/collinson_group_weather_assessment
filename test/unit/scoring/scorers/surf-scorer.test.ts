@@ -1,8 +1,8 @@
-import { defaultScoringConfig } from '../../../src/config/scoring';
-import type { ActivityScorer } from '../../../src/scoring/activity-scorer';
-import { SurfScorer } from '../../../src/scoring/surf-scorer';
-import type { DailyWeather, MarineDay } from '../../../src/types';
-import { aDay, aMarineDay, conditions } from '../../support/builders';
+import { defaultScoringConfig } from '../../../../src/config/scoring';
+import type { ActivityScorer } from '../../../../src/scoring/activity-scorer';
+import { SurfScorer } from '../../../../src/scoring/scorers/surf-scorer';
+import type { DailyWeather, MarineDay } from '../../../../src/types';
+import { aDay, aMarineDay, conditions } from '../../../support/builders';
 
 // Typed as the interface, exactly how the registry and ranking code use scorers.
 const scorer: ActivityScorer = new SurfScorer(defaultScoringConfig.surfing);
