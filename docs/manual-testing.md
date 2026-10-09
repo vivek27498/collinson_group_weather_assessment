@@ -66,9 +66,6 @@ and `warnings` contains _"Sea-state data is temporarily unavailable, so surfing 
 
 (Remove the variables afterwards with `Remove-Item Env:PORT, Env:OPEN_METEO_FORECAST_URL, Env:OPEN_METEO_MARINE_URL`.)
 
-**Rate limiting:** start with `$env:RATE_LIMIT_MAX=3; npm run dev` and send any request 4 times. The 4th
-returns HTTP 429 with `error.code = "RATE_LIMITED"`, and the response headers include `RateLimit-Policy` / `RateLimit`.
-
 **Stale-while-revalidate:** start with `$env:FORECAST_FRESH_MINUTES=1; npm run dev`, query a city,
 wait just over a minute, and query again. The response comes back instantly with `isStale: true`,
 and the log shows a background refresh. Query once more and `isStale` is false with a newer `forecastFetchedAt`.
@@ -167,10 +164,4 @@ for i in 1 2; do
     "variables": { "input": { "city": "Vienna" } }
   }'
 done
-```
-
-**Metrics**
-
-```bash
-curl -s localhost:4000/metrics | grep -E "^weather_(forecast|geocode)_cache_total|^weather_ranking_outcomes_total"
 ```

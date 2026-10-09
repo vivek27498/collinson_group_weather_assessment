@@ -9,7 +9,7 @@ Without one policy, each handler invents its own status codes and messages, and 
 
 ## Decision
 
-- **Error taxonomy** (`src/shared/errors/app-error.ts`): `AppError` subclasses carry a transport-agnostic
+- **Error taxonomy** (`src/modules/errors/app-error.ts`): `AppError` subclasses carry a transport-agnostic
   `kind` (VALIDATION, NOT_FOUND, ...) and a stable `code` that clients can switch on. Domain code never mentions HTTP.
 - **One mapper** (`error-mapper.ts`) turns any thrown value into `{ kind, code, httpStatus, message, logLevel }`.
   - Expected errors are exposed to the client and logged at `warn`, without a stack trace.

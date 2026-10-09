@@ -199,3 +199,23 @@ Unpolished notes on how the work is going, newest last. Cuts and the reasons for
 - Fix: `npm run test:cov` now runs unit + integration together with coverage (99.6% lines, 90%
   branches), and CI runs it once in place of the separate unit-coverage and integration steps.
 - Lesson: a quality gate nobody looks at isn't a gate. Check the CI result after every push.
+
+## 2026-10-09: Slimming down and restructuring (my request)
+
+- **Removed** prom-client metrics, express-rate-limit, the GitHub Actions workflow and the k6 load tests, to keep
+  the submission focused. The observability hooks that only fed Prometheus went too, so RankingService is
+  simpler. The data-source logs stay. Load-test findings stay recorded above, and the geocoding
+  single-flight fix they led to stays in the code.
+- **Restructured** reusable infrastructure into `src/modules/` (http, database, logger, errors, express,
+  lifecycle), each with an `index.ts` as its public API. Done with `git mv` plus a scripted import rewrite,
+  so history is kept and nothing was missed; 337 tests passed unchanged after the move.
+- **fetch → axios.** axios is configured to return raw responses so we still classify every failure
+  ourselves (axios by default throws on non-2xx and silently returns invalid JSON as a string).
+  - **Gotcha:** nock 14's `replyWithError` never reaches axios. The request hangs until the timeout, so a
+    "connection reset" test read as a timeout. The test now uses a genuinely refused local port.
+  - Verified live against Open-Meteo.
+- **DB pool size is now explicit config** (`DB_POOL_SIZE`, default 10). The load test had shown it's the main
+  warm-path throughput lever, and it was previously only reachable through a URL parameter.
+- **Security:** `npm audit` now reports high-severity advisories in the `mariadb` connector (no fix yet).
+  Assessed in ADR-004: only the credential-leak-despite-TLS one is relevant; mitigation is a private network.
+- 341 tests passing.

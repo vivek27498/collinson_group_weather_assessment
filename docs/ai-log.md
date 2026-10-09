@@ -57,3 +57,14 @@ and code, and I made the calls. This log records where I steered it, and what I 
 - The AI wrote the Postman collection as a generator script (reviewable diffs) and ran it with newman before
   handing it over.
 - **AI-caught issue:** the indoor rating looks too generous in sunny weeks. I left it as a PM question rather than retune silently.
+
+## Session 5: Slimming down (2026-10-09)
+
+- **I decided** to remove prom-client, express-rate-limit, GitHub Actions and the load tests, to switch fetch
+  to axios, and to group reusable code into `src/modules/`.
+- **The AI first summarised** what each removal would cost. It advised keeping nock (the end-to-end tests depend
+  on it) and helmet; I kept both.
+- **The AI proposed** the module layout (all non-weather infrastructure, with an index.ts per module). I chose it
+  over a minimal "only axios + database" move.
+- **Caught along the way:** a nock/axios interop quirk, and new `mariadb` connector advisories, which were
+  assessed rather than ignored.
