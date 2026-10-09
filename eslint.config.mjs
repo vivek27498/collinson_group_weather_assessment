@@ -31,7 +31,7 @@ const sqlInjectionGuards = {
 };
 
 export default tseslint.config(
-  { ignores: ['dist/', 'coverage/', 'node_modules/', 'src/generated/', 'load/k6/'] },
+  { ignores: ['dist/', 'coverage/', 'node_modules/', 'src/generated/'] },
   eslint.configs.recommended,
   ...tseslint.configs.strictTypeChecked,
   ...tseslint.configs.stylisticTypeChecked,
@@ -59,7 +59,7 @@ export default tseslint.config(
     languageOptions: { sourceType: 'commonjs' },
   },
   {
-    files: ['test/**/*.ts', 'load/**/*.ts'],
+    files: ['test/**/*.ts'],
     rules: {
       // Tests index into fixtures and build objects dynamically; these rules add noise there.
       'security/detect-object-injection': 'off',

@@ -9,7 +9,3 @@ updates:
       # @types/node must match the Node runtime major (22, see .nvmrc), not the latest Node.
       - dependency-name: '@types/node'
         update-types: ['version-update:semver-major']
-  - package-ecosystem: github-actions
-    directory: /
-    schedule:
-      interval: weekly
